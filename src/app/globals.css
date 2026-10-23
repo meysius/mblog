@@ -104,3 +104,116 @@
     color: #1a1f36;
   }
 }
+
+/* Rendered Markdown: post bodies and the editor preview. */
+@layer components {
+  .prose {
+    @apply font-serif text-[1.1875rem] leading-[1.7] wrap-break-word;
+  }
+  .prose > * + * {
+    margin-top: 1.25em;
+  }
+  .prose :where(h1, h2, h3, h4, h5, h6) {
+    @apply font-semibold tracking-tight text-balance;
+    margin-top: 2em;
+    line-height: 1.25;
+  }
+  .prose > :where(h1, h2, h3, h4, h5, h6) + * {
+    margin-top: 0.6em;
+  }
+  .prose > :first-child {
+    margin-top: 0;
+  }
+  .prose h1 {
+    font-size: 1.75em;
+  }
+  .prose h2 {
+    font-size: 1.45em;
+  }
+  .prose h3 {
+    font-size: 1.2em;
+  }
+  .prose :where(h4, h5, h6) {
+    font-size: 1em;
+  }
+  .prose a {
+    @apply text-link underline decoration-1 underline-offset-4 hover:decoration-2;
+  }
+  .prose strong {
+    font-weight: 600;
+  }
+  .prose :where(ul, ol) {
+    padding-left: 1.5em;
+  }
+  .prose ul {
+    list-style-type: disc;
+  }
+  .prose ol {
+    list-style-type: decimal;
+  }
+  .prose li::marker {
+    color: var(--muted-foreground);
+  }
+  .prose :where(li + li, li > * + *) {
+    margin-top: 0.4em;
+  }
+  .prose .contains-task-list {
+    padding-left: 0;
+    list-style-type: none;
+  }
+  .prose .task-list-item input {
+    margin-right: 0.5em;
+  }
+  .prose blockquote {
+    border-left: 2px solid var(--border);
+    padding-left: 1.25em;
+    font-style: italic;
+    color: var(--muted-foreground);
+  }
+  .prose hr {
+    margin-block: 3em;
+  }
+  .prose :not(pre) > code {
+    @apply rounded bg-muted font-mono;
+    padding: 0.15em 0.35em;
+    font-size: 0.85em;
+  }
+  .prose pre {
+    @apply overflow-x-auto rounded-lg bg-muted font-mono;
+    padding: 1em 1.25em;
+    font-size: 0.8em;
+    line-height: 1.6;
+  }
+  .prose img {
+    @apply rounded-lg;
+    max-width: 100%;
+    height: auto;
+  }
+  /* Block display lets wide tables scroll sideways instead of widening the page. */
+  .prose table {
+    @apply font-sans;
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.8em;
+  }
+  .prose :where(th, td) {
+    border-bottom: 1px solid var(--border);
+    padding: 0.5em 0.75em;
+    text-align: start;
+  }
+  .prose th {
+    font-weight: 600;
+  }
+  .prose del {
+    color: var(--muted-foreground);
+  }
+  .prose .footnotes {
+    margin-top: 3em;
+    border-top: 1px solid var(--border);
+    padding-top: 1.5em;
+    font-size: 0.85em;
+    color: var(--muted-foreground);
+  }
+}

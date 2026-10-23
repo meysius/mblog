@@ -78,7 +78,12 @@ async function PostTable() {
           {posts.map((post) => (
             <TableRow key={post.id}>
               <TableCell className="py-3 pl-4 whitespace-normal wrap-anywhere">
-                <div className="font-medium">{post.title}</div>
+                <Link
+                  href={`/admin/posts/${post.id}`}
+                  className="font-medium underline-offset-4 hover:underline"
+                >
+                  {post.title}
+                </Link>
                 {post.publishedAt ? (
                   <Link
                     href={`/posts/${post.slug}`}

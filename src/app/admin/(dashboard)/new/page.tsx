@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { PostEditor } from "./post-editor";
+import { createPost } from "../../actions";
+import { PostEditor } from "../post-editor";
 
 export const metadata: Metadata = { title: "New post" };
 
 export default function NewPostPage() {
-  return <PostEditor />;
+  return <PostEditor action={createPost} />;
 }

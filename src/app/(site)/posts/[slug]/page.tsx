@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Markdown } from "@/components/markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatLongDate } from "@/lib/format";
 import { getPublishedPost } from "@/lib/posts";
@@ -37,10 +38,7 @@ async function Post({ slug }: { slug: string }) {
           {post.title}
         </h1>
       </header>
-      {/* Plain text for now; Markdown rendering comes later. */}
-      <div className="max-w-[65ch] font-serif text-[1.1875rem] leading-[1.7] whitespace-pre-wrap">
-        {post.body}
-      </div>
+      <Markdown className="max-w-[65ch]">{post.body}</Markdown>
     </article>
   );
 }
