@@ -9,7 +9,7 @@ import { posts } from "@/db/schema";
 import { POSTS_TAG } from "@/lib/posts";
 
 export type PostFormState = {
-  error?: string;
+  errors?: { title?: string; slug?: string };
   values?: { title: string; slug: string; body: string };
 };
 
@@ -27,9 +27,12 @@ export async function createPost(
   };
   const publish = formData.get("publish") === "on";
 
-  if (!values.title) return { error: "Title is required.", values };
+  if (!values.title) return { errors: { title: "Add a title." }, values };
   if (!SLUG_PATTERN.test(values.slug)) {
-    return { error: "Slug must be lowercase letters, numbers and dashes.", values };
+    return {
+      errors: { slug: "Use lowercase letters, numbers and single dashes." },
+      values,
+    };
   }
 
   try {
@@ -40,7 +43,10 @@ export async function createPost(
       e.cause instanceof DatabaseError &&
       e.cause.code === UNIQUE_VIOLATION
     ) {
-      return { error: `Slug "${values.slug}" is already taken.`, values };
+      return {
+        errors: { slug: `Another post already uses /posts/${values.slug}. Pick a different URL.` },
+        values,
+      };
     }
     throw e;
   }

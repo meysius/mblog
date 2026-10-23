@@ -24,3 +24,4 @@ Edit `src/db/schema.ts`, then run `pnpm db:generate` and `pnpm db:migrate`. Migr
 - `src/lib/posts.ts`: all queries. Public reads use `'use cache'` + `cacheTag("posts")`; admin reads are uncached.
 - `src/app/admin/actions.ts`: server actions. Writes call `updateTag("posts")` so public pages refresh immediately.
 - `pnpm build` needs the database running, because the home page is prerendered from it.
+- UI: shadcn/ui on Base UI (`src/components/ui`, add more with `pnpm dlx shadcn@latest add <name>`). Colors and fonts are tokens in `src/app/globals.css`; dark mode follows the OS.

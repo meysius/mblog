@@ -1,26 +1,106 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* No theme toggle yet: dark mode follows the OS setting. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-link: var(--link);
+
+  /* Newsreader for what people read, Schibsted Grotesk for the interface. */
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-sans: var(--font-schibsted-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-schibsted-grotesk), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Indigo ink on cool white paper; ultramarine for links and focus. */
+:root {
+  --background: #ffffff;
+  --foreground: #1a1f36;
+  --card: #ffffff;
+  --card-foreground: #1a1f36;
+  --popover: #ffffff;
+  --popover-foreground: #1a1f36;
+  --primary: #1a1f36;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f2f6;
+  --secondary-foreground: #1a1f36;
+  --muted: #f1f2f6;
+  --muted-foreground: #5b6172;
+  --accent: #eef0fb;
+  --accent-foreground: #1a1f36;
+  --destructive: #c4302b;
+  --border: #e3e5ec;
+  --input: #d5d8e2;
+  --ring: #2d3bcc;
+  --link: #2d3bcc;
+  --highlight: #fff07a;
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #151936;
+    --foreground: #e6e8f2;
+    --card: #1b2042;
+    --card-foreground: #e6e8f2;
+    --popover: #1b2042;
+    --popover-foreground: #e6e8f2;
+    --primary: #e6e8f2;
+    --primary-foreground: #151936;
+    --secondary: #232850;
+    --secondary-foreground: #e6e8f2;
+    --muted: #232850;
+    --muted-foreground: #a3a8c3;
+    --accent: #262c5a;
+    --accent-foreground: #e6e8f2;
+    --destructive: #ff7a70;
+    --border: #2c3260;
+    --input: #363d70;
+    --ring: #9aa6ff;
+    --link: #9aa6ff;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  ::selection {
+    background-color: var(--highlight);
+    color: #1a1f36;
+  }
 }
