@@ -9,11 +9,14 @@ cp .env.example .env
 pnpm install
 pnpm db:up       # Postgres in Docker on localhost:5433
 pnpm db:migrate
+pnpm db:seed     # optional: 100 sample posts
 pnpm dev
 ```
 
 - Blog: http://localhost:3000
 - Admin: http://localhost:3000/admin. The first visit asks you to create the owner account; after that it's a normal sign-in. On a fresh deploy, do this right away, since setup is open until someone completes it.
+
+`pnpm db:seed` (`scripts/seed.mts`) adds the same 100 sample posts every time: drafts and published posts from the last three years, about half with an excerpt and some with a generated feature image (local storage only). Running it again skips posts that are already there. Public pages are cached, so if the app is already running, save any post or restart it to see them there.
 
 ## Image storage
 
