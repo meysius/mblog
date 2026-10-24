@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowUpRight, ImagePlus, PanelRight, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Eye, ImagePlus, PanelRight, PenLine, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import {
   useActionState,
@@ -12,7 +12,7 @@ import {
   useTransition,
 } from "react";
 import { flushSync, useFormStatus } from "react-dom";
-import { Markdown } from "@/components/markdown";
+import { PostArticle } from "@/components/post-article";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,7 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatShortDate } from "@/lib/format";
 import { IMAGE_TYPES, uploadImage, type MediaImage } from "@/lib/media";
 import type { EditablePost } from "@/lib/posts";
@@ -55,8 +56,6 @@ const initialState: PostFormState = {};
 // becomes. Type sizes match the published post (src/components/post-article.tsx).
 const surface =
   "w-full field-sizing-content resize-none bg-transparent outline-none placeholder:text-muted-foreground";
-const bodyType = "font-serif text-[1.1875rem] leading-[1.7]";
-const bodyHeight = "min-h-[50vh]";
 
 // Where the settings panel fits beside the writing column, it starts open.
 const WIDE = "(min-width: 64rem)";
@@ -81,7 +80,8 @@ export function PostEditor({ post, action }: PostEditorProps) {
   const [slugEdited, setSlugEdited] = useState(Boolean(post));
   const [featureImage, setFeatureImage] = useState(post?.featureImage ?? null);
   const [featureImageAlt, setFeatureImageAlt] = useState(post?.featureImageAlt ?? "");
-  const [tab, setTab] = useState("write");
+  // "write" or "preview": the post as readers will see it, unsaved changes included.
+  const [mode, setMode] = useState("write");
   const publishedAt = post?.publishedAt ?? null;
 
   // Until it's toggled, CSS decides whether the panel shows, so the server render
@@ -95,10 +95,11 @@ export function PostEditor({ post, action }: PostEditorProps) {
   const showSettings = settingsOpen ?? wide;
   const settingsId = useId();
 
-  // URL errors are shown in the settings panel, so open it when one comes back.
+  // Show the fields errors come back for: the title is only in Write, the URL in settings.
   const [seenState, setSeenState] = useState(state);
   if (state !== seenState) {
     setSeenState(state);
+    if (state.errors?.title) setMode("write");
     if (state.errors?.slug) setSettingsOpen(true);
   }
 
@@ -114,6 +115,8 @@ export function PostEditor({ post, action }: PostEditorProps) {
   }
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Until the body is first focused, its caret is at the start, which is no place for an image.
+  const bodyFocused = useRef(false);
   const imageInput = useRef<HTMLInputElement>(null);
   const bodyImages = useBodyImages(bodyRef, setBody, upload);
 
@@ -154,291 +157,331 @@ export function PostEditor({ post, action }: PostEditorProps) {
 
   return (
     <form action={formAction} className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur sm:px-4">
-        <Link
-          href="/admin"
-          className={cn(buttonVariants({ variant: "ghost" }), "text-muted-foreground")}
-        >
-          <ArrowLeft data-icon="inline-start" />
-          <span className="max-sm:sr-only">Posts</span>
-        </Link>
-        <div className="flex min-w-0 items-center gap-2.5 text-sm">
-          {publishedAt ? <Badge>Published</Badge> : <Badge variant="secondary">Draft</Badge>}
-          <span aria-live="polite" className="truncate text-muted-foreground max-sm:sr-only">
-            {uploads > 0
-              ? "Uploading image…"
-              : dirty
-                ? "Unsaved changes"
-                : state.savedAt
-                  ? "Saved"
-                  : null}
-          </span>
-        </div>
-
-        <div className="ml-auto flex items-center gap-1.5">
-          {post && publishedAt && (
+      <Tabs value={mode} onValueChange={setMode} className="flex-1 gap-0">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-4">
+          <div className="flex min-w-0 items-center gap-3">
             <Link
-              href={`/posts/${post.slug}`}
-              target="_blank"
-              className={buttonVariants({ variant: "ghost" })}
+              href="/admin"
+              className={cn(buttonVariants({ variant: "ghost" }), "text-muted-foreground")}
             >
-              <span className="max-sm:sr-only">View post</span>
-              <ArrowUpRight data-icon="inline-end" />
+              <ArrowLeft data-icon="inline-start" />
+              <span className="max-sm:sr-only">Posts</span>
             </Link>
-          )}
-          {post && !publishedAt && (
-            // Not a submit button, so Enter in a field saves rather than previews.
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              onClick={(e) => {
-                const form = e.currentTarget.form!;
-                if (!dirty) {
-                  window.open(`/admin/posts/${post.id}/preview`, "_blank");
-                } else if (form.reportValidity()) {
-                  previewTab.current = window.open("", "_blank");
-                  form.requestSubmit();
-                }
-              }}
-            >
-              <span className="max-sm:sr-only">Preview</span>
-              <ArrowUpRight data-icon="inline-end" />
-            </Button>
-          )}
-          {publishedAt ? (
-            <SaveButton pendingLabel="Updating…" disabled={uploads > 0}>
-              Update
-            </SaveButton>
-          ) : (
-            <>
-              <SaveButton variant="outline" pendingLabel="Saving…" disabled={uploads > 0}>
-                Save draft
-              </SaveButton>
-              <SaveButton intent="publish" pendingLabel="Publishing…" disabled={uploads > 0}>
-                Publish
-              </SaveButton>
-            </>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Post settings"
-            aria-controls={settingsId}
-            aria-expanded={showSettings}
-            className="text-muted-foreground aria-expanded:text-foreground"
-            onClick={() => setSettingsOpen(!showSettings)}
-          >
-            <PanelRight />
-          </Button>
-        </div>
-      </header>
-
-      <div className="flex flex-1">
-        <div className="min-w-0 flex-1 pt-12 pb-24 sm:pt-16">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6">
-            <div>
-              <label htmlFor="title" className="sr-only">
-                Title
-              </label>
-              <textarea
-                id="title"
-                name="title"
-                rows={1}
-                required
-                autoFocus={!post}
-                placeholder="Title"
-                value={title}
-                aria-invalid={Boolean(state.errors?.title)}
-                aria-describedby={state.errors?.title ? "title-error" : undefined}
-                onChange={(e) => {
-                  // A title is one line, even when pasted from several.
-                  const value = e.target.value.replace(/\s*\n\s*/g, " ");
-                  setTitle(value);
-                  if (!slugEdited) setSlug(slugify(value));
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    bodyRef.current?.focus();
-                  }
-                }}
-                className={`${surface} font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl`}
-              />
-              {state.errors?.title && (
-                <FieldError id="title-error" className="mt-2">
-                  {state.errors.title}
-                </FieldError>
-              )}
+            {/* No room on phones, where the settings panel shows the status instead. */}
+            <div className="flex min-w-0 items-center gap-2.5 text-sm max-sm:sr-only">
+              {publishedAt ? <Badge>Published</Badge> : <Badge variant="secondary">Draft</Badge>}
+              <span aria-live="polite" className="truncate text-muted-foreground max-md:sr-only">
+                {uploads > 0
+                  ? "Uploading image…"
+                  : dirty
+                    ? "Unsaved changes"
+                    : state.savedAt
+                      ? "Saved"
+                      : null}
+              </span>
             </div>
+          </div>
 
-            <Tabs value={tab} onValueChange={setTab} className="gap-5">
-              <div className="flex items-center justify-between gap-4">
-                <TabsList variant="line">
-                  <TabsTrigger value="write">Write</TabsTrigger>
-                  <TabsTrigger value="preview">Preview</TabsTrigger>
-                </TabsList>
-                {tab === "write" && (
+          {/* Writing tools, centered over the page on wider screens. */}
+          <div className="flex items-center gap-1">
+            <TabsList aria-label="Mode">
+              <TabsTrigger value="write" className="sm:px-2.5">
+                <PenLine />
+                <span className="max-sm:sr-only">Write</span>
+              </TabsTrigger>
+              <TabsTrigger value="preview" className="sm:px-2.5">
+                <Eye />
+                <span className="max-sm:sr-only">Preview</span>
+              </TabsTrigger>
+            </TabsList>
+            <Tooltip>
+              <TooltipTrigger
+                render={
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="icon"
+                    aria-label="Insert image"
+                    disabled={mode !== "write"}
                     className="text-muted-foreground"
                     onClick={() => imageInput.current?.click()}
-                  >
-                    <ImagePlus data-icon="inline-start" />
-                    Add image
-                  </Button>
-                )}
-                <input
-                  ref={imageInput}
-                  type="file"
-                  accept={IMAGE_TYPES}
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    bodyImages.insertImages([...(e.target.files ?? [])]);
-                    e.target.value = "";
-                  }}
-                />
-              </div>
-              {/* Kept mounted so the body is still submitted while previewing. */}
-              <TabsContent value="write" keepMounted>
-                <label htmlFor="body" className="sr-only">
-                  Body
-                </label>
-                <textarea
-                  ref={bodyRef}
-                  id="body"
-                  name="body"
-                  placeholder="Start writing. Markdown works here, and you can paste or drop images."
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  onPaste={(e) => {
-                    const files = [...e.clipboardData.files];
-                    if (files.some((file) => file.type.startsWith("image/"))) {
-                      e.preventDefault();
-                      bodyImages.insertImages(files);
-                    }
-                  }}
-                  onDrop={(e) => {
-                    if (!e.dataTransfer.types.includes("Files")) return;
-                    e.preventDefault();
-                    bodyImages.insertImages([...e.dataTransfer.files]);
-                  }}
-                  className={`${surface} ${bodyHeight} ${bodyType} max-w-[65ch]`}
-                />
-                {bodyImages.error && <FieldError className="mt-3">{bodyImages.error}</FieldError>}
-              </TabsContent>
-              <TabsContent value="preview" className={bodyHeight}>
-                {body.trim() ? (
-                  <Markdown className="max-w-[65ch]">{body}</Markdown>
-                ) : (
-                  <p className={`${bodyType} text-muted-foreground`}>Nothing to preview yet.</p>
-                )}
-              </TabsContent>
-            </Tabs>
+                  />
+                }
+              >
+                <ImagePlus />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Insert image</TooltipContent>
+            </Tooltip>
+            <input
+              ref={imageInput}
+              type="file"
+              accept={IMAGE_TYPES}
+              multiple
+              hidden
+              onChange={(e) => {
+                const el = bodyRef.current;
+                if (el && !bodyFocused.current) {
+                  el.setSelectionRange(el.value.length, el.value.length);
+                }
+                bodyImages.insertImages([...(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
           </div>
-        </div>
 
-        {/* Always mounted, so its fields are submitted while it's closed. */}
-        <aside
-          id={settingsId}
-          aria-label="Post settings"
-          className={cn(
-            settingsOpen === undefined ? "hidden lg:flex" : settingsOpen ? "flex" : "hidden",
-            "fixed inset-x-0 top-14 bottom-0 z-30 flex-col gap-7 overflow-y-auto border-l bg-background p-5 shadow-lg sm:left-auto sm:w-80",
-            "lg:sticky lg:h-[calc(100svh-3.5rem)] lg:shrink-0 lg:shadow-none",
-          )}
-        >
-          <div className="-my-1 flex items-center justify-between lg:hidden">
-            <h2 className="font-medium">Post settings</h2>
+          <div className="ml-auto flex items-center gap-1.5">
+            {publishedAt ? (
+              <SaveButton pendingLabel="Updating…" disabled={uploads > 0}>
+                Update
+              </SaveButton>
+            ) : (
+              <>
+                <SaveButton variant="outline" pendingLabel="Saving…" disabled={uploads > 0}>
+                  <span>
+                    Save<span className="max-sm:hidden"> draft</span>
+                  </span>
+                </SaveButton>
+                <SaveButton intent="publish" pendingLabel="Publishing…" disabled={uploads > 0}>
+                  Publish
+                </SaveButton>
+              </>
+            )}
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
-              aria-label="Close settings"
-              className="-mr-1.5"
-              onClick={() => setSettingsOpen(false)}
+              size="icon"
+              aria-label="Post settings"
+              aria-controls={settingsId}
+              aria-expanded={showSettings}
+              className="text-muted-foreground aria-expanded:text-foreground"
+              onClick={() => setSettingsOpen(!showSettings)}
             >
-              <X />
+              <PanelRight />
             </Button>
           </div>
+        </header>
 
-          <div className="flex flex-col gap-2">
-            <FieldTitle>Status</FieldTitle>
-            {publishedAt ? (
-              <>
+        <div className="flex flex-1">
+          <div className="min-w-0 flex-1 pt-12 pb-24 sm:pt-16">
+            <div className="mx-auto w-full max-w-3xl px-6">
+              {/* Kept mounted so the title and body are still submitted while previewing. */}
+              <TabsContent value="write" keepMounted className="flex flex-col gap-6">
+                <div>
+                  <label htmlFor="title" className="sr-only">
+                    Title
+                  </label>
+                  <textarea
+                    id="title"
+                    name="title"
+                    rows={1}
+                    required
+                    autoFocus={!post}
+                    placeholder="Title"
+                    value={title}
+                    aria-invalid={Boolean(state.errors?.title)}
+                    aria-describedby={state.errors?.title ? "title-error" : undefined}
+                    onChange={(e) => {
+                      // A title is one line, even when pasted from several.
+                      const value = e.target.value.replace(/\s*\n\s*/g, " ");
+                      setTitle(value);
+                      if (!slugEdited) setSlug(slugify(value));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        bodyRef.current?.focus();
+                      }
+                    }}
+                    // The browser can only point out a field it can see.
+                    onInvalid={() => flushSync(() => setMode("write"))}
+                    className={`${surface} font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl`}
+                  />
+                  {state.errors?.title && (
+                    <FieldError id="title-error" className="mt-2">
+                      {state.errors.title}
+                    </FieldError>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="body" className="sr-only">
+                    Body
+                  </label>
+                  <textarea
+                    ref={bodyRef}
+                    id="body"
+                    name="body"
+                    placeholder="Start writing. Markdown works here, and you can paste or drop images."
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    onFocus={() => (bodyFocused.current = true)}
+                    onPaste={(e) => {
+                      const files = [...e.clipboardData.files];
+                      if (files.some((file) => file.type.startsWith("image/"))) {
+                        e.preventDefault();
+                        bodyImages.insertImages(files);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      if (!e.dataTransfer.types.includes("Files")) return;
+                      e.preventDefault();
+                      bodyImages.insertImages([...e.dataTransfer.files]);
+                    }}
+                    className={`${surface} min-h-[50vh] max-w-[65ch] font-serif text-[1.1875rem] leading-[1.7]`}
+                  />
+                  {bodyImages.error && <FieldError className="mt-3">{bodyImages.error}</FieldError>}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="preview">
+                {title.trim() || body.trim() || featureImage ? (
+                  <PostArticle
+                    post={{
+                      title: title.trim() || "Untitled",
+                      body,
+                      publishedAt,
+                      featureImage,
+                      featureImageAlt: featureImageAlt.trim(),
+                    }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
+                )}
+              </TabsContent>
+            </div>
+          </div>
+
+          {/* Always mounted, so its fields are submitted while it's closed. */}
+          <aside
+            id={settingsId}
+            aria-label="Post settings"
+            className={cn(
+              settingsOpen === undefined ? "hidden lg:flex" : settingsOpen ? "flex" : "hidden",
+              "fixed inset-x-0 top-14 bottom-0 z-30 flex-col gap-7 overflow-y-auto border-l bg-background p-5 shadow-lg sm:left-auto sm:w-80",
+              "lg:sticky lg:h-[calc(100svh-3.5rem)] lg:shrink-0 lg:shadow-none",
+            )}
+          >
+            <div className="-my-1 flex items-center justify-between lg:hidden">
+              <h2 className="font-medium">Post settings</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Close settings"
+                className="-mr-1.5"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <X />
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <FieldTitle>Status</FieldTitle>
+              {publishedAt ? (
                 <p className="text-sm text-muted-foreground">
                   Published {formatShortDate(publishedAt)}. Saving updates it on the blog.
                 </p>
-                <SaveButton
-                  intent="unpublish"
-                  variant="outline"
-                  pendingLabel="Unpublishing…"
-                  disabled={uploads > 0}
-                  className="self-start"
-                >
-                  Unpublish
-                </SaveButton>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Draft. Only you can see it until you publish it.
-              </p>
-            )}
-          </div>
-
-          <Field data-invalid={Boolean(state.errors?.slug)}>
-            <FieldLabel htmlFor="slug">URL</FieldLabel>
-            <InputGroup>
-              <InputGroupAddon>
-                <InputGroupText>/posts/</InputGroupText>
-              </InputGroupAddon>
-              <InputGroupInput
-                id="slug"
-                name="slug"
-                required
-                pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                title="Lowercase letters, numbers and single dashes"
-                placeholder="my-post"
-                value={slug}
-                aria-invalid={Boolean(state.errors?.slug)}
-                onChange={(e) => {
-                  setSlug(e.target.value);
-                  setSlugEdited(Boolean(post) || e.target.value !== "");
-                }}
-                // The browser can only point out a field it can see.
-                onInvalid={() => flushSync(() => setSettingsOpen(true))}
-              />
-            </InputGroup>
-            {state.errors?.slug ? (
-              <FieldError>{state.errors.slug}</FieldError>
-            ) : (
-              <FieldDescription>
-                {post
-                  ? "Changing it breaks existing links to the post."
-                  : "Filled in from the title. Edit it to choose your own."}
-              </FieldDescription>
-            )}
-          </Field>
-
-          <FeatureImageField
-            image={featureImage}
-            alt={featureImageAlt}
-            onImageChange={setFeatureImage}
-            onAltChange={setFeatureImageAlt}
-            upload={upload}
-          />
-
-          {post && (
-            <div className="-mx-5 mt-auto border-t px-3 pt-4">
-              <DeletePostButton id={post.id} title={post.title} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Draft. Only you can see it until you publish it.
+                </p>
+              )}
+              {post && (
+                <div className="flex flex-wrap gap-2">
+                  {publishedAt ? (
+                    <>
+                      <Link
+                        href={`/posts/${post.slug}`}
+                        target="_blank"
+                        className={cn(buttonVariants({ variant: "outline" }))}
+                      >
+                        View post
+                        <ArrowUpRight data-icon="inline-end" />
+                      </Link>
+                      <SaveButton
+                        intent="unpublish"
+                        variant="outline"
+                        pendingLabel="Unpublishing…"
+                        disabled={uploads > 0}
+                      >
+                        Unpublish
+                      </SaveButton>
+                    </>
+                  ) : (
+                    // The saved draft at its own URL, in the site's layout. Not a submit
+                    // button, so Enter in a field saves rather than previews.
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={(e) => {
+                        const form = e.currentTarget.form!;
+                        if (!dirty) {
+                          window.open(`/admin/posts/${post.id}/preview`, "_blank");
+                        } else if (form.reportValidity()) {
+                          previewTab.current = window.open("", "_blank");
+                          form.requestSubmit();
+                        }
+                      }}
+                    >
+                      Open preview
+                      <ArrowUpRight data-icon="inline-end" />
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </aside>
-      </div>
+
+            <Field data-invalid={Boolean(state.errors?.slug)}>
+              <FieldLabel htmlFor="slug">URL</FieldLabel>
+              <InputGroup>
+                <InputGroupAddon>
+                  <InputGroupText>/posts/</InputGroupText>
+                </InputGroupAddon>
+                <InputGroupInput
+                  id="slug"
+                  name="slug"
+                  required
+                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  title="Lowercase letters, numbers and single dashes"
+                  placeholder="my-post"
+                  value={slug}
+                  aria-invalid={Boolean(state.errors?.slug)}
+                  onChange={(e) => {
+                    setSlug(e.target.value);
+                    setSlugEdited(Boolean(post) || e.target.value !== "");
+                  }}
+                  // The browser can only point out a field it can see.
+                  onInvalid={() => flushSync(() => setSettingsOpen(true))}
+                />
+              </InputGroup>
+              {state.errors?.slug ? (
+                <FieldError>{state.errors.slug}</FieldError>
+              ) : (
+                <FieldDescription>
+                  {post
+                    ? "Changing it breaks existing links to the post."
+                    : "Filled in from the title. Edit it to choose your own."}
+                </FieldDescription>
+              )}
+            </Field>
+
+            <FeatureImageField
+              image={featureImage}
+              alt={featureImageAlt}
+              onImageChange={setFeatureImage}
+              onAltChange={setFeatureImageAlt}
+              upload={upload}
+            />
+
+            {post && (
+              <div className="-mx-5 mt-auto border-t px-3 pt-4">
+                <DeletePostButton id={post.id} title={post.title} />
+              </div>
+            )}
+          </aside>
+        </div>
+      </Tabs>
     </form>
   );
 }
