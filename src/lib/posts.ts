@@ -1,5 +1,6 @@
 import { and, count, desc, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
+import { cache } from "react";
 import { db } from "@/db";
 import { media, posts } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
@@ -86,7 +87,12 @@ const hasStatus = {
 };
 
 // Admin reads are never cached, and check the session themselves.
-export async function getAllPosts(status?: PostStatus) {
+
+/** One page of posts, newest first. */
+export async function getPosts(
+  status: PostStatus | undefined,
+  { limit, offset }: { limit: number; offset: number },
+) {
   await requireUser();
   const rows = await db
     .select({
@@ -100,17 +106,21 @@ export async function getAllPosts(status?: PostStatus) {
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
     .where(status && hasStatus[status])
-    .orderBy(desc(posts.createdAt));
+    // The id breaks ties, so no post shows up on two pages or none.
+    .orderBy(desc(posts.createdAt), desc(posts.id))
+    .limit(limit)
+    .offset(offset);
   return rows.map((row) => ({ ...row, featureImage: toMediaImage(row.featureImage) }));
 }
 
-export async function getPostCounts() {
+// Cached per request, since the filter and the pagination both need it.
+export const getPostCounts = cache(async () => {
   await requireUser();
   const [{ all, published }] = await db
     .select({ all: count(), published: count(posts.publishedAt) })
     .from(posts);
   return { all, draft: all - published, published };
-}
+});
 
 export async function getPostForEditing(id: number) {
   await requireUser();

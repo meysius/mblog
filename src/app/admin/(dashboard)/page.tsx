@@ -2,6 +2,7 @@ import { ArrowUpRight, FileText, PenLine, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -16,14 +17,24 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatShortDate } from "@/lib/format";
 import { mediaSrc, type MediaImage } from "@/lib/media";
-import { getAllPosts, getPostCounts, type PostStatus } from "@/lib/posts";
+import { getPostCounts, getPosts, type PostStatus } from "@/lib/posts";
 import { cn } from "@/lib/utils";
-import { FILTER_LABELS, parseStatus, postsHref } from "./post-filters";
+import { Pagination } from "./pagination";
+import {
+  FILTER_LABELS,
+  parsePage,
+  parseStatus,
+  POSTS_PER_PAGE,
+  postsHref,
+} from "./post-filters";
 
 export const metadata: Metadata = { title: "Posts" };
 
 export default function AdminPage({ searchParams }: PageProps<"/admin">) {
-  const status = searchParams.then(({ status }) => parseStatus(status));
+  const params = searchParams.then(({ status, page }) => ({
+    status: parseStatus(status),
+    page: parsePage(page),
+  }));
 
   return (
     <>
@@ -32,7 +43,7 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
         {/* On phones the filter gets a row of its own, below the title and button. */}
         <div className="order-last w-full sm:order-none sm:w-auto">
           <Suspense fallback={<Skeleton className="h-8 w-full sm:w-64" />}>
-            {status.then((status) => (
+            {params.then(({ status }) => (
               <StatusFilter current={status} />
             ))}
           </Suspense>
@@ -44,8 +55,8 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
       </div>
 
       <Suspense fallback={<PostListSkeleton />}>
-        {status.then((status) => (
-          <PostList status={status} />
+        {params.then(({ status, page }) => (
+          <PostList status={status} page={page} />
         ))}
       </Suspense>
     </>
@@ -85,10 +96,18 @@ const emptyMessages = {
   published: ["Nothing published yet", "Publish a draft and it shows up here and on the blog."],
 };
 
-async function PostList({ status }: { status?: PostStatus }) {
+async function PostList({ status, page }: { status?: PostStatus; page: number }) {
   // Render at request time so the admin always sees the current database state.
   await connection();
-  const posts = await getAllPosts(status);
+  const total = (await getPostCounts())[status ?? "all"];
+  const pageCount = Math.max(1, Math.ceil(total / POSTS_PER_PAGE));
+  // Past the last page, for example after deleting the only post on it.
+  if (page > pageCount) redirect(postsHref(status, pageCount));
+
+  const posts = await getPosts(status, {
+    limit: POSTS_PER_PAGE,
+    offset: (page - 1) * POSTS_PER_PAGE,
+  });
   const [emptyTitle, emptyDescription] = emptyMessages[status ?? "all"];
 
   if (posts.length === 0) {
@@ -105,17 +124,32 @@ async function PostList({ status }: { status?: PostStatus }) {
     );
   }
 
+  const first = (page - 1) * POSTS_PER_PAGE + 1;
   return (
-    <ul className="-mx-3">
-      {posts.map((post) => (
-        <PostRow key={post.id} post={post} />
-      ))}
-    </ul>
+    <>
+      <ul className="-mx-3">
+        {posts.map((post) => (
+          <PostRow key={post.id} post={post} />
+        ))}
+      </ul>
+      {pageCount > 1 && (
+        <div className="mt-6 flex items-center justify-between gap-4 border-t pt-4">
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {first}–{first + posts.length - 1} of {total}
+          </p>
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            href={(page) => postsHref(status, page)}
+          />
+        </div>
+      )}
+    </>
   );
 }
 
 type PostRowProps = {
-  post: Awaited<ReturnType<typeof getAllPosts>>[number];
+  post: Awaited<ReturnType<typeof getPosts>>[number];
 };
 
 function PostRow({ post }: PostRowProps) {
