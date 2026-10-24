@@ -8,6 +8,8 @@ type PostArticleProps = {
   post: {
     title: string;
     body: string;
+    /** Shown under the title when the author wrote one. */
+    excerpt: string;
     /** Null for a draft, which only the preview shows. */
     publishedAt: Date | null;
     featureImage: MediaImage | null;
@@ -33,6 +35,11 @@ export function PostArticle({ post }: PostArticleProps) {
         <h1 className="mt-3 font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl">
           {post.title}
         </h1>
+        {post.excerpt && (
+          <p className="mt-4 font-serif text-xl leading-snug text-pretty text-muted-foreground sm:text-2xl">
+            {post.excerpt}
+          </p>
+        )}
       </header>
       {post.featureImage && (
         <Image

@@ -8,6 +8,7 @@ import { DatabaseError } from "pg";
 import { db } from "@/db";
 import { posts } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { EXCERPT_MAX_LENGTH, joinLines } from "@/lib/excerpt";
 import { deleteUnusedMedia, syncPostMedia } from "@/lib/media-usage";
 import { POSTS_TAG } from "@/lib/posts";
 
@@ -28,6 +29,9 @@ function readPostForm(formData: FormData) {
     slug: String(formData.get("slug") ?? "").trim(),
     // Browsers submit textarea line breaks as CRLF; store plain LF like the editor uses.
     body: String(formData.get("body") ?? "").replace(/\r\n?/g, "\n"),
+    excerpt: joinLines(String(formData.get("excerpt") ?? ""))
+      .trim()
+      .slice(0, EXCERPT_MAX_LENGTH),
     featureImageId,
     featureImageAlt: featureImageId ? String(formData.get("featureImageAlt") ?? "").trim() : "",
   };

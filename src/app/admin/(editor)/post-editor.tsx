@@ -44,6 +44,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatShortDate } from "@/lib/format";
 import { IMAGE_TYPES, uploadImage, type MediaImage } from "@/lib/media";
 import type { EditablePost } from "@/lib/posts";
+import { EXCERPT_MAX_LENGTH, joinLines } from "@/lib/excerpt";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { deletePost, type PostFormState } from "../actions";
@@ -76,6 +77,7 @@ export function PostEditor({ post, action }: PostEditorProps) {
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
   const [body, setBody] = useState(post?.body ?? "");
+  const [excerpt, setExcerpt] = useState(post?.excerpt ?? "");
   // A new post's URL follows the title until it's edited by hand. Saved posts keep theirs.
   const [slugEdited, setSlugEdited] = useState(Boolean(post));
   const [featureImage, setFeatureImage] = useState(post?.featureImage ?? null);
@@ -139,6 +141,7 @@ export function PostEditor({ post, action }: PostEditorProps) {
     (title.trim() !== post.title ||
       slug.trim() !== post.slug ||
       body !== post.body ||
+      excerpt.trim() !== post.excerpt ||
       (featureImage?.id ?? null) !== (post.featureImage?.id ?? null) ||
       featureImageAlt.trim() !== post.featureImageAlt);
 
@@ -301,6 +304,40 @@ export function PostEditor({ post, action }: PostEditorProps) {
                       {state.errors.title}
                     </FieldError>
                   )}
+
+                  <label htmlFor="excerpt" className="sr-only">
+                    Excerpt
+                  </label>
+                  <textarea
+                    id="excerpt"
+                    name="excerpt"
+                    rows={1}
+                    maxLength={EXCERPT_MAX_LENGTH}
+                    placeholder="Add an excerpt"
+                    value={excerpt}
+                    aria-describedby="excerpt-hint"
+                    onChange={(e) => setExcerpt(joinLines(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        bodyRef.current?.focus();
+                      }
+                    }}
+                    // Styled like it is under the published post's title.
+                    className={cn(
+                      surface,
+                      "peer mt-4 font-serif text-xl leading-snug text-pretty text-muted-foreground placeholder:text-muted-foreground/50 sm:text-2xl",
+                    )}
+                  />
+                  <p
+                    id="excerpt-hint"
+                    className="mt-2 hidden justify-between gap-4 text-xs text-muted-foreground peer-focus:flex"
+                  >
+                    <span>Shown under the title, in post lists and in search results.</span>
+                    <span className="tabular-nums">
+                      {excerpt.length}/{EXCERPT_MAX_LENGTH}
+                    </span>
+                  </p>
                 </div>
 
                 <div>
@@ -334,10 +371,11 @@ export function PostEditor({ post, action }: PostEditorProps) {
               </TabsContent>
 
               <TabsContent value="preview">
-                {title.trim() || body.trim() || featureImage ? (
+                {title.trim() || excerpt.trim() || body.trim() || featureImage ? (
                   <PostArticle
                     post={{
                       title: title.trim() || "Untitled",
+                      excerpt: excerpt.trim(),
                       body,
                       publishedAt,
                       featureImage,

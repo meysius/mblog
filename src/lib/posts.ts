@@ -42,15 +42,16 @@ export async function getPublishedPosts() {
       slug: posts.slug,
       title: posts.title,
       publishedAt: posts.publishedAt,
-      // The start of the body is plenty to build an excerpt from.
+      writtenExcerpt: posts.excerpt,
+      // Without a written excerpt, the start of the body is plenty to build one from.
       opening: sql<string>`left(${posts.body}, 2000)`,
     })
     .from(posts)
     .where(isPublished)
     .orderBy(desc(posts.publishedAt));
-  return rows.map(({ opening, ...row }) => ({
+  return rows.map(({ writtenExcerpt, opening, ...row }) => ({
     ...asPublished(row),
-    excerpt: excerpt(opening, 240),
+    excerpt: writtenExcerpt || excerpt(opening, 240),
   }));
 }
 
@@ -64,6 +65,7 @@ export async function getPublishedPost(slug: string) {
       slug: posts.slug,
       title: posts.title,
       body: posts.body,
+      excerpt: posts.excerpt,
       publishedAt: posts.publishedAt,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,
@@ -115,6 +117,7 @@ export async function getPostForEditing(id: number) {
       slug: posts.slug,
       title: posts.title,
       body: posts.body,
+      excerpt: posts.excerpt,
       publishedAt: posts.publishedAt,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,

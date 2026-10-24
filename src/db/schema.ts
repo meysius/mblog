@@ -5,6 +5,8 @@ export const posts = pgTable("posts", {
   slug: text().notNull().unique(),
   title: text().notNull(),
   body: text().notNull().default(""),
+  // Written by the author. Empty means post lists use the start of the body instead.
+  excerpt: text().notNull().default(""),
   // null = draft; a past date = published; a future date = scheduled
   publishedAt: timestamp("published_at", { withTimezone: true }),
   featureImageId: integer("feature_image_id").references(() => media.id, {

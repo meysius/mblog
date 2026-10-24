@@ -42,7 +42,7 @@ It's read at build time, so rebuild after changing it. `/media/` links then redi
 
 ## Schema changes
 
-Edit `src/db/schema.ts`, then run `pnpm db:generate` and `pnpm db:migrate`. Migrations live in `drizzle/` and are committed.
+Edit `src/db/schema.ts`, then run `pnpm db:generate` and `pnpm db:migrate`. Migrations live in `drizzle/` and are committed. Restart `pnpm dev` afterwards: the database client caches each table's columns, so queries that use a new column fail until it restarts.
 
 ## How it fits together
 
