@@ -1,8 +1,8 @@
 "use client";
 
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, ImagePlus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Markdown } from "@/components/markdown";
 import {
   AlertDialog,
@@ -25,19 +25,14 @@ import {
 } from "@/components/ui/input-group";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { IMAGE_TYPES, uploadImage, type MediaImage } from "@/lib/media";
 import type { EditablePost } from "@/lib/posts";
+import { slugify } from "@/lib/slug";
 import { deletePost, type PostFormState } from "../actions";
+import { FeatureImageField } from "./feature-image-field";
+import { useBodyImages } from "./use-body-images";
 
 const initialState: PostFormState = {};
-
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 function submitLabel(wasPublished: boolean, publish: boolean, pending: boolean) {
   if (wasPublished && publish) return pending ? "Updating…" : "Update";
@@ -72,6 +67,37 @@ export function PostEditor({ post, action }: PostEditorProps) {
   const [slugEdited, setSlugEdited] = useState(Boolean(post));
   const wasPublished = Boolean(post?.publishedAt);
   const [publish, setPublish] = useState(wasPublished);
+  const [featureImage, setFeatureImage] = useState(post?.featureImage ?? null);
+  const [featureImageAlt, setFeatureImageAlt] = useState(post?.featureImageAlt ?? "");
+  const [tab, setTab] = useState("write");
+
+  // Saving waits until uploads finish, so no placeholder or missing image gets saved.
+  const [uploads, setUploads] = useState(0);
+  async function upload(file: File): Promise<MediaImage> {
+    setUploads((n) => n + 1);
+    try {
+      return await uploadImage(file);
+    } finally {
+      setUploads((n) => n - 1);
+    }
+  }
+
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const bodyImages = useBodyImages(bodyRef, setBody, upload);
+
+  // A file dropped outside a drop zone would make the browser open it, leaving the editor.
+  useEffect(() => {
+    const ignoreFileDrop = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", ignoreFileDrop);
+    window.addEventListener("drop", ignoreFileDrop);
+    return () => {
+      window.removeEventListener("dragover", ignoreFileDrop);
+      window.removeEventListener("drop", ignoreFileDrop);
+    };
+  }, []);
 
   // The action refreshes `post` after a save, so this clears once the save lands.
   const dirty =
@@ -79,7 +105,9 @@ export function PostEditor({ post, action }: PostEditorProps) {
     (title.trim() !== post.title ||
       slug.trim() !== post.slug ||
       body !== post.body ||
-      publish !== wasPublished);
+      publish !== wasPublished ||
+      (featureImage?.id ?? null) !== (post.featureImage?.id ?? null) ||
+      featureImageAlt.trim() !== post.featureImageAlt);
 
   return (
     <form action={formAction} className="grid gap-10 lg:grid-cols-[1fr_18rem] lg:gap-14">
@@ -110,24 +138,63 @@ export function PostEditor({ post, action }: PostEditorProps) {
           )}
         </div>
 
-        <Tabs defaultValue="write" className="gap-5">
-          <TabsList variant="line">
-            <TabsTrigger value="write">Write</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
+        <Tabs value={tab} onValueChange={setTab} className="gap-5">
+          <div className="flex items-center justify-between gap-4">
+            <TabsList variant="line">
+              <TabsTrigger value="write">Write</TabsTrigger>
+              <TabsTrigger value="preview">Preview</TabsTrigger>
+            </TabsList>
+            {tab === "write" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => imageInput.current?.click()}
+              >
+                <ImagePlus data-icon="inline-start" />
+                Add image
+              </Button>
+            )}
+            <input
+              ref={imageInput}
+              type="file"
+              accept={IMAGE_TYPES}
+              multiple
+              hidden
+              onChange={(e) => {
+                bodyImages.insertImages([...(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
+          </div>
           {/* Kept mounted so the body is still submitted while previewing. */}
           <TabsContent value="write" keepMounted>
             <label htmlFor="body" className="sr-only">
               Body
             </label>
             <textarea
+              ref={bodyRef}
               id="body"
               name="body"
-              placeholder="Start writing. Markdown works here."
+              placeholder="Start writing. Markdown works here, and you can paste or drop images."
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onPaste={(e) => {
+                const files = [...e.clipboardData.files];
+                if (files.some((file) => file.type.startsWith("image/"))) {
+                  e.preventDefault();
+                  bodyImages.insertImages(files);
+                }
+              }}
+              onDrop={(e) => {
+                if (!e.dataTransfer.types.includes("Files")) return;
+                e.preventDefault();
+                bodyImages.insertImages([...e.dataTransfer.files]);
+              }}
               className={`${surface} ${bodyHeight} field-sizing-content resize-none font-serif text-[1.1875rem] leading-[1.7]`}
             />
+            {bodyImages.error && <FieldError className="mt-3">{bodyImages.error}</FieldError>}
           </TabsContent>
           <TabsContent value="preview" className={bodyHeight}>
             {body.trim() ? (
@@ -175,6 +242,14 @@ export function PostEditor({ post, action }: PostEditorProps) {
             )}
           </Field>
 
+          <FeatureImageField
+            image={featureImage}
+            alt={featureImageAlt}
+            onImageChange={setFeatureImage}
+            onAltChange={setFeatureImageAlt}
+            upload={upload}
+          />
+
           <Field>
             <FieldLabel className="w-full justify-between">
               {wasPublished ? "Published" : "Publish now"}
@@ -187,14 +262,18 @@ export function PostEditor({ post, action }: PostEditorProps) {
           </Field>
 
           <div className="flex flex-col gap-2">
-            <Button type="submit" size="lg" disabled={pending} className="w-full">
+            <Button type="submit" size="lg" disabled={pending || uploads > 0} className="w-full">
               {submitLabel(wasPublished, publish, pending)}
             </Button>
-            {post && (
-              <p aria-live="polite" className="h-5 text-center text-sm text-muted-foreground">
-                {dirty ? "Unsaved changes" : state.savedAt ? "Saved" : null}
-              </p>
-            )}
+            <p aria-live="polite" className="h-5 text-center text-sm text-muted-foreground">
+              {uploads > 0
+                ? "Uploading image…"
+                : dirty
+                  ? "Unsaved changes"
+                  : state.savedAt
+                    ? "Saved"
+                    : null}
+            </p>
           </div>
 
           {post && (

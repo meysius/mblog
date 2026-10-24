@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Markdown } from "@/components/markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatLongDate } from "@/lib/format";
+import { mediaSrc } from "@/lib/media";
 import { getPublishedPost } from "@/lib/posts";
 
 export async function generateMetadata({
@@ -38,6 +40,19 @@ async function Post({ slug }: { slug: string }) {
           {post.title}
         </h1>
       </header>
+      {post.featureImage && (
+        <Image
+          src={mediaSrc(post.featureImage.url)}
+          width={post.featureImage.width}
+          height={post.featureImage.height}
+          alt={post.featureImageAlt}
+          // The site column is 48rem with 1.5rem of padding each side.
+          sizes="(min-width: 48rem) 45rem, calc(100vw - 3rem)"
+          loading="eager"
+          fetchPriority="high"
+          className="mb-10 w-full rounded-lg bg-muted"
+        />
+      )}
       <Markdown className="max-w-[65ch]">{post.body}</Markdown>
     </article>
   );
