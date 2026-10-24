@@ -46,13 +46,16 @@ export async function getPublishedPosts() {
       writtenExcerpt: posts.excerpt,
       // Without a written excerpt, the start of the body is plenty to build one from.
       opening: sql<string>`left(${posts.body}, 2000)`,
+      featureImage: featureImageColumns,
     })
     .from(posts)
+    .leftJoin(media, eq(media.id, posts.featureImageId))
     .where(isPublished)
     .orderBy(desc(posts.publishedAt));
-  return rows.map(({ writtenExcerpt, opening, ...row }) => ({
+  return rows.map(({ writtenExcerpt, opening, featureImage, ...row }) => ({
     ...asPublished(row),
     excerpt: writtenExcerpt || excerpt(opening, 240),
+    featureImage: toMediaImage(featureImage),
   }));
 }
 

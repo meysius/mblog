@@ -62,6 +62,7 @@
   --ring: #2d3bcc;
   --link: #2d3bcc;
   --highlight: #fff07a;
+  --mark: #fff07a;
   --radius: 0.5rem;
 }
 
@@ -86,6 +87,7 @@
     --input: #363d70;
     --ring: #9aa6ff;
     --link: #9aa6ff;
+    --mark: #5e5a2c;
   }
 }
 
@@ -102,6 +104,30 @@
   ::selection {
     background-color: var(--highlight);
     color: #1a1f36;
+  }
+}
+
+/* Post titles in lists: hovering or focusing one runs a highlighter across it,
+   line by line. Apply it to an inline element so each line gets its own stroke. */
+@layer components {
+  .marker {
+    background-image: linear-gradient(var(--mark), var(--mark));
+    background-repeat: no-repeat;
+    background-position: 0 88%;
+    background-size: 0% 48%;
+    transition: background-size 0.15s ease-in;
+  }
+  .marker:hover,
+  .marker:focus-visible {
+    background-size: 100% 48%;
+    transition: background-size 0.4s cubic-bezier(0.3, 0.7, 0.4, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marker,
+    .marker:hover,
+    .marker:focus-visible {
+      transition: none;
+    }
   }
 }
 
