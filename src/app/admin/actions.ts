@@ -87,6 +87,8 @@ export async function updatePost(
   await requireUser();
   const { values, publish, errors } = readPostForm(formData);
   if (errors) return { errors };
+  // Saving to preview never changes whether the post is published.
+  const forPreview = formData.get("intent") === "preview";
 
   // The images this save stopped using, or undefined if there's no such post.
   let dropped: number[] | undefined;
@@ -97,7 +99,9 @@ export async function updatePost(
         .set({
           ...values,
           // Editing a published post keeps its original date; unpublishing clears it.
-          publishedAt: publish ? sql`coalesce(${posts.publishedAt}, now())` : null,
+          ...(!forPreview && {
+            publishedAt: publish ? sql`coalesce(${posts.publishedAt}, now())` : null,
+          }),
         })
         .where(eq(posts.id, id))
         .returning({ id: posts.id });

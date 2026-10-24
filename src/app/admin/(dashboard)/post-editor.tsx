@@ -99,15 +99,26 @@ export function PostEditor({ post, action }: PostEditorProps) {
     };
   }, []);
 
-  // The action refreshes `post` after a save, so this clears once the save lands.
-  const dirty =
+  // The action refreshes `post` after a save, so these clear once the save lands.
+  const contentDirty =
     post !== undefined &&
     (title.trim() !== post.title ||
       slug.trim() !== post.slug ||
       body !== post.body ||
-      publish !== wasPublished ||
       (featureImage?.id ?? null) !== (post.featureImage?.id ?? null) ||
       featureImageAlt.trim() !== post.featureImageAlt);
+  const dirty = contentDirty || (post !== undefined && publish !== wasPublished);
+
+  // Preview shows the saved post, so with unsaved edits it saves first. Browsers
+  // only open tabs right on a click, so the tab opens then and loads once the save lands.
+  const previewTab = useRef<Window | null>(null);
+  useEffect(() => {
+    const tab = previewTab.current;
+    if (!tab || pending) return;
+    previewTab.current = null;
+    if (state.errors || !post) tab.close();
+    else tab.location.href = `/admin/posts/${post.id}/preview`;
+  }, [state, pending, post]);
 
   return (
     <form action={formAction} className="grid gap-10 lg:grid-cols-[1fr_18rem] lg:gap-14">
@@ -289,7 +300,26 @@ export function PostEditor({ post, action }: PostEditorProps) {
                     <ExternalLink data-icon="inline-end" />
                   </Link>
                 ) : (
-                  <span />
+                  // Submits like Save draft, but the save leaves the post a draft.
+                  <Button
+                    type="submit"
+                    name="intent"
+                    value="preview"
+                    variant="ghost"
+                    size="sm"
+                    disabled={pending || uploads > 0}
+                    onClick={(e) => {
+                      if (!contentDirty) {
+                        e.preventDefault();
+                        window.open(`/admin/posts/${post.id}/preview`, "_blank");
+                      } else if (e.currentTarget.form?.checkValidity()) {
+                        previewTab.current = window.open("", "_blank");
+                      }
+                    }}
+                  >
+                    Preview
+                    <ExternalLink data-icon="inline-end" />
+                  </Button>
                 )}
                 <DeletePostButton id={post.id} title={post.title} />
               </div>
