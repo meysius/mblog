@@ -31,14 +31,17 @@ function readPostForm(formData: FormData) {
     featureImageId,
     featureImageAlt: featureImageId ? String(formData.get("featureImageAlt") ?? "").trim() : "",
   };
-  const publish = formData.get("publish") === "on";
+  // Set by the Publish and Unpublish buttons. Any other save leaves the post as it was.
+  const intent = formData.get("intent");
+  const publish = intent === "publish";
+  const unpublish = intent === "unpublish";
 
   let errors: PostFormState["errors"];
   if (!values.title) errors = { title: "Add a title." };
   else if (!SLUG_PATTERN.test(values.slug)) {
     errors = { slug: "Use lowercase letters, numbers and single dashes." };
   }
-  return { values, publish, errors };
+  return { values, publish, unpublish, errors };
 }
 
 function slugTakenErrors(e: unknown, slug: string) {
@@ -85,10 +88,8 @@ export async function updatePost(
   formData: FormData,
 ): Promise<PostFormState> {
   await requireUser();
-  const { values, publish, errors } = readPostForm(formData);
+  const { values, publish, unpublish, errors } = readPostForm(formData);
   if (errors) return { errors };
-  // Saving to preview never changes whether the post is published.
-  const forPreview = formData.get("intent") === "preview";
 
   // The images this save stopped using, or undefined if there's no such post.
   let dropped: number[] | undefined;
@@ -98,10 +99,9 @@ export async function updatePost(
         .update(posts)
         .set({
           ...values,
-          // Editing a published post keeps its original date; unpublishing clears it.
-          ...(!forPreview && {
-            publishedAt: publish ? sql`coalesce(${posts.publishedAt}, now())` : null,
-          }),
+          // Publishing an already published post keeps its original date.
+          ...(publish && { publishedAt: sql`coalesce(${posts.publishedAt}, now())` }),
+          ...(unpublish && { publishedAt: null }),
         })
         .where(eq(posts.id, id))
         .returning({ id: posts.id });

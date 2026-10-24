@@ -79,7 +79,8 @@ export function FeatureImageField({
               width={image.width}
               height={image.height}
               alt=""
-              sizes="16rem"
+              // The settings panel: full width on phones, 20rem with 1.25rem padding beyond.
+              sizes="(min-width: 40rem) 17.5rem, 100vw"
               className="aspect-video w-full rounded-lg border bg-muted object-cover"
             />
             {uploading && (

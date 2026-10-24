@@ -1,4 +1,4 @@
-import { and, desc, eq, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
 import { media, posts } from "@/db/schema";
@@ -75,13 +75,36 @@ export async function getPublishedPost(slug: string) {
   return post ? { ...asPublished(post), featureImage: toMediaImage(post.featureImage) } : null;
 }
 
+/** How the admin groups posts: a draft has no publish date, a published post has one. */
+export type PostStatus = "draft" | "published";
+
+const hasStatus = {
+  draft: isNull(posts.publishedAt),
+  published: isNotNull(posts.publishedAt),
+};
+
 // Admin reads are never cached, and check the session themselves.
-export async function getAllPosts() {
+export async function getAllPosts(status?: PostStatus) {
   await requireUser();
   return db
-    .select({ id: posts.id, slug: posts.slug, title: posts.title, publishedAt: posts.publishedAt })
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      title: posts.title,
+      publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt,
+    })
     .from(posts)
+    .where(status && hasStatus[status])
     .orderBy(desc(posts.createdAt));
+}
+
+export async function getPostCounts() {
+  await requireUser();
+  const [{ all, published }] = await db
+    .select({ all: count(), published: count(posts.publishedAt) })
+    .from(posts);
+  return { all, draft: all - published, published };
 }
 
 export async function getPostForEditing(id: number) {
