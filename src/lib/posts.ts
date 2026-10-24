@@ -88,17 +88,20 @@ const hasStatus = {
 // Admin reads are never cached, and check the session themselves.
 export async function getAllPosts(status?: PostStatus) {
   await requireUser();
-  return db
+  const rows = await db
     .select({
       id: posts.id,
       slug: posts.slug,
       title: posts.title,
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
+      featureImage: featureImageColumns,
     })
     .from(posts)
+    .leftJoin(media, eq(media.id, posts.featureImageId))
     .where(status && hasStatus[status])
     .orderBy(desc(posts.createdAt));
+  return rows.map((row) => ({ ...row, featureImage: toMediaImage(row.featureImage) }));
 }
 
 export async function getPostCounts() {
