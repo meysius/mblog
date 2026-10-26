@@ -4,13 +4,13 @@ import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireUser } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/site";
-import { SidebarNav } from "./sidebar-nav";
+import { SidebarLinks, SidebarNav } from "./sidebar-nav";
 import { UserMenu } from "./user-menu";
 
 // A column down the left on wider screens; a header above the page on small ones.
 export function Sidebar() {
   return (
-    <aside className="flex flex-col gap-5 border-b bg-muted/40 px-4 py-3 md:fixed md:inset-y-0 md:left-0 md:w-60 md:border-r md:border-b-0 md:px-3 md:py-4">
+    <aside className="flex flex-col gap-3 border-b bg-muted/40 px-4 py-3 md:fixed md:inset-y-0 md:left-0 md:w-60 md:border-r md:gap-5 md:border-b-0 md:px-3 md:py-4">
       <div className="flex h-8 items-center justify-between gap-2 md:px-2">
         <Link href="/admin" className="font-serif text-xl font-semibold tracking-tight">
           {SITE_NAME}
@@ -22,9 +22,11 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Posts is the only section so far, so small screens go without. */}
-      <nav aria-label="Admin" className="max-md:hidden">
-        <SidebarNav />
+      {/* A row under the header on small screens. */}
+      <nav aria-label="Admin" className="max-md:-mx-2">
+        <Suspense fallback={<SidebarLinks />}>
+          <SidebarNav />
+        </Suspense>
       </nav>
 
       <div className="mt-auto hidden flex-col gap-1 md:flex">

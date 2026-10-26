@@ -1,8 +1,8 @@
-import { and, count, desc, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { db } from "@/db";
-import { media, posts } from "@/db/schema";
+import { media, posts, postTags, tags } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { excerpt } from "@/lib/markdown";
 import { mediaUrl, type MediaImage } from "@/lib/media";
@@ -12,7 +12,7 @@ import { mediaUrl, type MediaImage } from "@/lib/media";
 // so the hour limits how long a restarted server can show content from before a save.
 export const POSTS_TAG = "posts";
 
-const isPublished = lte(posts.publishedAt, sql`now()`);
+export const isPublished = lte(posts.publishedAt, sql`now()`);
 
 // isPublished guarantees publishedAt is set; narrow the type to match.
 function asPublished<T extends { publishedAt: Date | null }>(row: T) {
@@ -27,6 +27,30 @@ const featureImageColumns = {
   height: media.height,
 };
 
+/** A tag as posts show it: a link to the tag's page. */
+export type PostTag = { name: string; slug: string };
+
+// A post's tags, in the order the author gave them.
+const tagList = sql<PostTag[]>`(
+  select coalesce(
+    json_agg(json_build_object('name', ${tags.name}, 'slug', ${tags.slug}) order by ${postTags.position}),
+    '[]'
+  )
+  from ${postTags}
+  join ${tags} on ${tags.id} = ${postTags.tagId}
+  where ${postTags.postId} = ${posts.id}
+)`;
+
+// Only the posts with this tag; every post without one.
+function tagged(tagId: number | undefined) {
+  return tagId === undefined
+    ? undefined
+    : inArray(
+        posts.id,
+        db.select({ id: postTags.postId }).from(postTags).where(eq(postTags.tagId, tagId)),
+      );
+}
+
 function toMediaImage(
   image: { id: number; filename: string; width: number; height: number } | null,
 ): MediaImage | null {
@@ -39,7 +63,19 @@ export async function getPublishedPosts() {
   "use cache";
   cacheLife("hours");
   cacheTag(POSTS_TAG);
+  return getPostSummaries();
+}
 
+/** The published posts with this tag, newest first, for its page on the blog. */
+export async function getPublishedPostsTagged(tagId: number) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(POSTS_TAG);
+  return getPostSummaries(tagId);
+}
+
+// Published posts as post lists show them, newest first: every one, or those with a tag.
+async function getPostSummaries(tagId?: number) {
   const rows = await db
     .select({
       slug: posts.slug,
@@ -53,7 +89,7 @@ export async function getPublishedPosts() {
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
-    .where(isPublished)
+    .where(and(isPublished, tagged(tagId)))
     .orderBy(desc(posts.publishedAt));
   return rows.map(({ writtenExcerpt, opening, featureImage, ...row }) => ({
     ...asPublished(row),
@@ -61,6 +97,8 @@ export async function getPublishedPosts() {
     featureImage: toMediaImage(featureImage),
   }));
 }
+
+export type PostSummary = Awaited<ReturnType<typeof getPostSummaries>>[number];
 
 export async function getPublishedPost(slug: string) {
   "use cache";
@@ -77,6 +115,7 @@ export async function getPublishedPost(slug: string) {
       updatedAt: posts.updatedAt,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,
+      tags: tagList,
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
@@ -102,6 +141,7 @@ export async function getFeedPosts(limit: number) {
       updatedAt: posts.updatedAt,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,
+      tags: tagList,
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
@@ -121,9 +161,10 @@ const hasStatus = {
 
 // Admin reads are never cached, and check the session themselves.
 
-/** One page of posts, newest first. */
+/** One page of posts, newest first, optionally only those with a tag. */
 export async function getPosts(
   status: PostStatus | undefined,
+  tagId: number | undefined,
   { limit, offset }: { limit: number; offset: number },
 ) {
   await requireUser();
@@ -135,10 +176,11 @@ export async function getPosts(
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
       featureImage: featureImageColumns,
+      tags: tagList,
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
-    .where(status && hasStatus[status])
+    .where(and(status && hasStatus[status], tagged(tagId)))
     // The id breaks ties, so no post shows up on two pages or none.
     .orderBy(desc(posts.createdAt), desc(posts.id))
     .limit(limit)
@@ -147,11 +189,12 @@ export async function getPosts(
 }
 
 // Cached per request, since the filter and the pagination both need it.
-export const getPostCounts = cache(async () => {
+export const getPostCounts = cache(async (tagId?: number) => {
   await requireUser();
   const [{ all, published }] = await db
     .select({ all: count(), published: count(posts.publishedAt) })
-    .from(posts);
+    .from(posts)
+    .where(tagged(tagId));
   return { all, draft: all - published, published };
 });
 
@@ -167,6 +210,7 @@ export async function getPostForEditing(id: number) {
       publishedAt: posts.publishedAt,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,
+      tags: tagList,
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))

@@ -43,12 +43,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatShortDate } from "@/lib/format";
 import { IMAGE_TYPES, uploadImage, type MediaImage } from "@/lib/media";
-import type { EditablePost } from "@/lib/posts";
+import type { EditablePost, PostTag } from "@/lib/posts";
 import { EXCERPT_MAX_LENGTH, joinLines } from "@/lib/excerpt";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { deletePost, type PostFormState } from "../actions";
 import { FeatureImageField } from "./feature-image-field";
+import { TagField } from "./tag-field";
 import { useBodyImages } from "./use-body-images";
 
 const initialState: PostFormState = {};
@@ -69,10 +70,12 @@ function subscribeToWidth(onChange: () => void) {
 type PostEditorProps = {
   /** The saved post when editing; omitted for a new post. */
   post?: EditablePost;
+  /** Every saved tag, for the tag field to suggest. */
+  tagOptions: PostTag[];
   action: (state: PostFormState, formData: FormData) => Promise<PostFormState>;
 };
 
-export function PostEditor({ post, action }: PostEditorProps) {
+export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
@@ -82,6 +85,8 @@ export function PostEditor({ post, action }: PostEditorProps) {
   const [slugEdited, setSlugEdited] = useState(Boolean(post));
   const [featureImage, setFeatureImage] = useState(post?.featureImage ?? null);
   const [featureImageAlt, setFeatureImageAlt] = useState(post?.featureImageAlt ?? "");
+  const savedTags = post?.tags.map((tag) => tag.name) ?? [];
+  const [tags, setTags] = useState(savedTags);
   // "write" or "preview": the post as readers will see it, unsaved changes included.
   const [mode, setMode] = useState("write");
   const publishedAt = post?.publishedAt ?? null;
@@ -143,7 +148,8 @@ export function PostEditor({ post, action }: PostEditorProps) {
       body !== post.body ||
       excerpt.trim() !== post.excerpt ||
       (featureImage?.id ?? null) !== (post.featureImage?.id ?? null) ||
-      featureImageAlt.trim() !== post.featureImageAlt);
+      featureImageAlt.trim() !== post.featureImageAlt ||
+      tags.join("\n") !== savedTags.join("\n"));
 
   // Preview shows the saved post, so with unsaved edits it saves first. Browsers
   // only open tabs right on a click, so the tab opens then and loads once the save lands.
@@ -380,6 +386,11 @@ export function PostEditor({ post, action }: PostEditorProps) {
                       publishedAt,
                       featureImage,
                       featureImageAlt: featureImageAlt.trim(),
+                      // A new tag's URL is settled when it's saved; slugify is a close guess.
+                      tags: tags.map((name) => ({
+                        name,
+                        slug: tagOptions.find((tag) => tag.name === name)?.slug ?? slugify(name),
+                      })),
                     }}
                   />
                 ) : (
@@ -503,6 +514,8 @@ export function PostEditor({ post, action }: PostEditorProps) {
                 </FieldDescription>
               )}
             </Field>
+
+            <TagField value={tags} onChange={setTags} options={tagOptions} />
 
             <FeatureImageField
               image={featureImage}

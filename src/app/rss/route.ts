@@ -33,12 +33,15 @@ export async function GET() {
     const image = post.featureImage
       ? `<p><img src="${escapeXml(absoluteUrl(mediaSrc(post.featureImage.url)))}" alt="${escapeXml(post.featureImageAlt)}" width="${post.featureImage.width}" height="${post.featureImage.height}"></p>`
       : "";
+    const categories = post.tags
+      .map((tag) => `\n      <category>${escapeXml(tag.name)}</category>`)
+      .join("");
     return `
     <item>
       <title>${escapeXml(post.title)}</title>
       <link>${escapeXml(url)}</link>
       <guid isPermaLink="false">${post.id}</guid>
-      <pubDate>${post.publishedAt.toUTCString()}</pubDate>
+      <pubDate>${post.publishedAt.toUTCString()}</pubDate>${categories}
       <description>${escapeXml(post.excerpt || excerpt(post.body, 300))}</description>
       <content:encoded>${cdata(image + markdownToHtml(post.body, url))}</content:encoded>
     </item>`;

@@ -1,10 +1,8 @@
 import "server-only";
 import { and, eq, inArray, lt, notExists, notInArray, or, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type Transaction } from "@/db";
 import { media, postMedia } from "@/db/schema";
 import { deleteMediaFile } from "@/lib/media-storage";
-
-type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Candidates only; each one is looked up in the media table.
 const MEDIA_URL = /\/media\/([a-z0-9.-]+)/g;

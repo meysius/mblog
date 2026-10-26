@@ -9,14 +9,14 @@ cp .env.example .env
 pnpm install
 pnpm db:up       # Postgres in Docker on localhost:5433
 pnpm db:migrate
-pnpm db:seed     # optional: 100 sample posts
+pnpm db:seed     # optional: 100 sample posts, with tags
 pnpm dev
 ```
 
 - Blog: http://localhost:3000
 - Admin: http://localhost:3000/admin. The first visit asks you to create the owner account; after that it's a normal sign-in. On a fresh deploy, do this right away, since setup is open until someone completes it.
 
-`pnpm db:seed` (`scripts/seed.mts`) adds the same 100 sample posts every time: drafts and published posts from the last three years, about half with an excerpt and some with a generated feature image (local storage only). Running it again skips posts that are already there. Public pages are cached, so if the app is already running, save any post or restart it to see them there.
+`pnpm db:seed` (`scripts/seed.mts`) adds the same 100 sample posts every time: drafts and published posts from the last three years, about half with an excerpt, some with a generated feature image (local storage only), and each tagged with its topic (Software, Writing, Reading, Tools or Life) and sometimes Favorites or Notes. Running it again skips posts that are already there, and gives sample posts that have no tags their tags. Public pages are cached, so if the app is already running, save any post or restart it to see them there.
 
 ## Site address
 
@@ -59,14 +59,15 @@ Edit `src/db/schema.ts`, then run `pnpm db:generate` and `pnpm db:migrate`. Migr
 
 ## How it fits together
 
-- `src/lib/posts.ts`: all queries. Public reads use `'use cache'` + `cacheTag("posts")` and refresh at least hourly (`cacheLife("hours")`), because Next forgets `updateTag` calls when the server restarts; admin reads are uncached.
-- `src/app/admin/actions.ts`: server actions. Writes call `updateTag("posts")` so public pages refresh immediately.
+- `src/lib/posts.ts` and `src/lib/tags.ts`: all queries. Public reads use `'use cache'` + `cacheTag("posts")` and refresh at least hourly (`cacheLife("hours")`), because Next forgets `updateTag` calls when the server restarts; admin reads are uncached.
+- `src/app/admin/actions.ts` and `tag-actions.ts`: server actions. Writes call `updateTag("posts")` so public pages refresh immediately.
 - Auth: `src/lib/auth.ts` holds sessions (a random token in an httpOnly cookie, its SHA-256 in the `sessions` table) and `requireUser()`. Every admin read and server action calls `requireUser()`; `src/proxy.ts` only redirects visitors who have no session cookie at all. Passwords are hashed with scrypt (`src/lib/password.ts`).
 - Sign-in limits (`src/lib/login-limits.ts`): an address gets 10 failed sign-ins per 15 minutes, and an email 100 per hour from all addresses together. Past that, attempts are refused until the window ends, before any password is checked. The counts are in the `login_limits` table, so they survive restarts; `delete from login_limits;` lifts every block at once. The address is the last entry in `X-Forwarded-For`, so run the app behind a reverse proxy that sets it: Caddy does by default, and nginx does with `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`.
 - Draft preview: `/admin/posts/<id>/preview` renders any post, drafts included, with the site's layout (`src/components/post-article.tsx` is shared with the public post page). In the editor, Preview shows the post as readers will see it, unsaved edits included; "Open preview" in the settings panel opens this page instead, saving unsaved edits first without changing whether the post is published.
 - Posts are Markdown (with GitHub extensions), rendered by `src/components/markdown.tsx`. Raw HTML is escaped. Styles for rendered posts live under `.prose` in `src/app/globals.css`. The RSS feed renders the same way with `markdownToHtml` in `src/lib/markdown.ts`, giving links and images full URLs.
 - Post pages (`src/app/(site)/posts/[slug]/page.tsx`) render in full before they're sent (`ensureStatic = "navigation"`), so a missing or unpublished post returns a real 404. Published posts are prerendered at build; any other URL renders on its first visit and is kept until a save changes the posts, or for an hour.
-- SEO: `src/lib/site.ts` has the site's name, description and address. The root layout sets shared metadata and the RSS link; the post page adds its description, canonical URL, share previews (the feature image) and JSON-LD. `src/app/sitemap.ts` and `src/app/robots.ts` generate `/sitemap.xml` and `/robots.txt`, and `src/app/rss/route.ts` serves the newest 20 posts in full at `/rss`.
+- Tags: posts get them in the editor's settings panel, which suggests existing tags and makes new ones on save. Names match ignoring case, so "postgres" picks the existing "Postgres". A post keeps its tags in the order given (`post_tags.position`) and shows them as links at the end of the post. Each tag has a page, `/tags/<slug>`, listing its published posts, rendered like post pages and in the sitemap; a tag no published post has returns 404. Admin → Tags lists every tag with its post count (which opens the post list filtered to it, `/admin?tag=<slug>`) and edits a tag's name, URL and description, which shows on its page. Deleting a tag takes it off its posts; the posts stay. The RSS feed lists a post's tags as categories.
+- SEO: `src/lib/site.ts` has the site's name, description and address. The root layout sets shared metadata and the RSS link; the post page adds its description, canonical URL, share previews (the feature image and tags) and JSON-LD; tag pages add their description and canonical URL. `src/app/sitemap.ts` and `src/app/robots.ts` generate `/sitemap.xml` and `/robots.txt`, and `src/app/rss/route.ts` serves the newest 20 posts in full at `/rss`.
 - Images: the editor uploads to `POST /media` (`src/app/media/route.ts`). Each image is turned upright, scaled to at most 2000px and re-encoded with sharp, which also strips EXIF data such as GPS location (`src/lib/media-upload.ts`). Files go to local disk or an S3-compatible bucket (`src/lib/media-storage/`, see [Image storage](#image-storage)) and are recorded in the `media` table. Posts always refer to an image as `/media/<filename>`, which the app serves from storage with long-lived cache headers.
 - Unused images are deleted automatically (`src/lib/media-usage.ts`). Each save records which images a post uses (body and feature image) in `post_media`. An image a save or delete stops using is deleted as soon as no other post uses it; an upload never saved into a post is deleted once it's a day old, so images in an unsaved editor survive.
 - `pnpm build` needs the database running, because the home page is prerendered from it.

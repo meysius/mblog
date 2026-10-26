@@ -1,15 +1,15 @@
-// Adds 100 sample posts: `pnpm db:seed`. Runs again safely: posts whose URL is
-// already taken are skipped. Node runs this file as is, so it imports only modules
+// Adds 100 sample posts with tags: `pnpm db:seed`. Runs again safely: posts whose
+// URL is already taken are skipped, and sample posts without tags get theirs. Node runs this file as is, so it imports only modules
 // with no "@/" imports of their own, by their full filenames.
 
 import { randomBytes } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import nextEnv from "@next/env";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import sharp from "sharp";
-import { media, postMedia, posts } from "../src/db/schema.ts";
+import { media, postMedia, posts, postTags, tags } from "../src/db/schema.ts";
 import { slugify } from "../src/lib/slug.ts";
 
 nextEnv.loadEnvConfig(process.cwd());
@@ -296,6 +296,21 @@ const themes: Record<string, Theme> = {
   },
 };
 
+// Every post gets its theme's tag. A separate generator picks the extra ones, so the
+// posts themselves came out the same as before tags existed.
+const themeTags: Record<string, { name: string; description: string }> = {
+  software: {
+    name: "Software",
+    description: "Building and running small software projects, mostly alone.",
+  },
+  writing: { name: "Writing", description: "Drafting, editing and publishing, a little at a time." },
+  reading: { name: "Reading", description: "Books, reading lists and the habits around them." },
+  tools: { name: "Tools", description: "The setups and systems that stuck, and the ones that didn't." },
+  life: { name: "Life", description: "Walks, kitchens, trains and other things close to home." },
+};
+const extraTags = ["Favorites", "Notes"];
+const tagRandom = mulberry32(7);
+
 const quotes = [
   "Write it down while it's still obvious. It won't be for long.",
   "Small and finished beats large and almost.",
@@ -361,7 +376,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
 const ago = (days: number) => new Date(now - days * DAY);
 
-const samples = Object.values(themes).flatMap((theme) =>
+const samples = Object.entries(themes).flatMap(([key, theme]) =>
   theme.titles.map((title) => {
     const draft = chance(0.12);
     // Published over the last three years; drafts started in the last two months.
@@ -381,7 +396,11 @@ const samples = Object.values(themes).flatMap((theme) =>
       createdAt,
       updatedAt,
     };
-    return { post, withCover: chance(0.45) };
+    return {
+      post,
+      withCover: chance(0.45),
+      tags: [themeTags[key].name, ...extraTags.filter(() => tagRandom() < 0.2)],
+    };
   }),
 );
 
@@ -399,6 +418,7 @@ const toAdd = samples.filter((sample) => !taken.has(sample.post.slug));
 const local = (process.env.MEDIA_STORAGE || "local") === "local";
 const mediaDir = path.resolve(process.env.MEDIA_DIR || "uploads");
 const written: string[] = [];
+let tagged = 0;
 
 try {
   const covers = new Map<string, Awaited<ReturnType<typeof coverImage>>>();
@@ -412,7 +432,7 @@ try {
     }
   }
 
-  await db.transaction(async (tx) => {
+  tagged = await db.transaction(async (tx) => {
     for (const { post } of toAdd) {
       const cover = covers.get(post.slug);
       const [image] = cover
@@ -428,6 +448,50 @@ try {
       // Recorded like an editor save, so the image isn't cleaned up as unused.
       if (image) await tx.insert(postMedia).values({ postId: id, mediaId: image.id });
     }
+
+    // The posts just added, and any sample posts from before tags existed.
+    const tagsBySlug = new Map(samples.map((sample) => [sample.post.slug, sample.tags]));
+    const untagged = await tx
+      .select({ id: posts.id, slug: posts.slug })
+      .from(posts)
+      .where(
+        and(
+          inArray(posts.slug, [...tagsBySlug.keys()]),
+          notExists(tx.select().from(postTags).where(eq(postTags.postId, posts.id))),
+        ),
+      );
+
+    // Tag ids by lowercased name, looked up or made as they're first needed.
+    const tagIds = new Map<string, number>();
+    async function tagId(name: string) {
+      const key = name.toLowerCase();
+      if (!tagIds.has(key)) {
+        const [existing] = await tx
+          .select({ id: tags.id })
+          .from(tags)
+          .where(or(sql`lower(${tags.name}) = ${key}`, eq(tags.slug, slugify(name))))
+          .limit(1);
+        const description =
+          Object.values(themeTags).find((tag) => tag.name === name)?.description ?? "";
+        const [tag] = existing
+          ? [existing]
+          : await tx
+              .insert(tags)
+              .values({ name, slug: slugify(name), description })
+              .returning({ id: tags.id });
+        tagIds.set(key, tag.id);
+      }
+      return tagIds.get(key)!;
+    }
+
+    for (const { id, slug } of untagged) {
+      const values = [];
+      for (const [position, name] of tagsBySlug.get(slug)!.entries()) {
+        values.push({ postId: id, tagId: await tagId(name), position });
+      }
+      await tx.insert(postTags).values(values);
+    }
+    return untagged.length;
   });
 } catch (e) {
   await Promise.all(written.map((filename) => rm(path.join(mediaDir, filename), { force: true })));
@@ -443,7 +507,10 @@ console.log(
     : "Nothing to add: the sample posts are already there.",
 );
 if (taken.size) console.log(`Skipped ${taken.size} whose URL was already taken.`);
-if (toAdd.length) {
+if (tagged > toAdd.length) {
+  console.log(`Tagged ${tagged - toAdd.length} sample posts that had no tags.`);
+}
+if (tagged) {
   console.log("If the app is running, save any post or restart it to see them on the public pages.");
 }
 if (!local) console.log("MEDIA_STORAGE isn't local, so no feature images were added.");

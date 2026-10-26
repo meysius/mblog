@@ -1,4 +1,4 @@
-import { ArrowUpRight, FileText, PenLine, Plus } from "lucide-react";
+import { ArrowUpRight, FileText, PenLine, Plus, X } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,22 +17,25 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatShortDate } from "@/lib/format";
 import { mediaSrc, type MediaImage } from "@/lib/media";
-import { getPostCounts, getPosts, type PostStatus } from "@/lib/posts";
+import { getPostCounts, getPosts } from "@/lib/posts";
+import { getTagBySlug } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import { Pagination } from "./pagination";
 import {
   FILTER_LABELS,
   parsePage,
   parseStatus,
+  parseTag,
   POSTS_PER_PAGE,
   postsHref,
+  type PostFilter,
 } from "./post-filters";
 
 export const metadata: Metadata = { title: "Posts" };
 
 export default function AdminPage({ searchParams }: PageProps<"/admin">) {
-  const params = searchParams.then(({ status, page }) => ({
-    status: parseStatus(status),
+  const params = searchParams.then(({ status, tag, page }) => ({
+    filter: { status: parseStatus(status), tag: parseTag(tag) },
     page: parsePage(page),
   }));
 
@@ -43,8 +46,8 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
         {/* On phones the filter gets a row of its own, below the title and button. */}
         <div className="order-last w-full sm:order-none sm:w-auto">
           <Suspense fallback={<Skeleton className="h-8 w-full sm:w-64" />}>
-            {params.then(({ status }) => (
-              <StatusFilter current={status} />
+            {params.then(({ filter }) => (
+              <StatusFilter filter={filter} />
             ))}
           </Suspense>
         </div>
@@ -54,9 +57,13 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
         </Link>
       </div>
 
+      <Suspense>
+        {params.then(({ filter }) => filter.tag && <TagNotice filter={filter} />)}
+      </Suspense>
+
       <Suspense fallback={<PostListSkeleton />}>
-        {params.then(({ status, page }) => (
-          <PostList status={status} page={page} />
+        {params.then(({ filter, page }) => (
+          <PostList filter={filter} page={page} />
         ))}
       </Suspense>
     </>
@@ -65,10 +72,17 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
 
 const statuses = [undefined, "draft", "published"] as const;
 
-async function StatusFilter({ current }: { current?: PostStatus }) {
+// The tag the list is filtered by, or undefined for every post. Null when the
+// URL names a tag that doesn't exist.
+async function filterTag(slug: string | undefined) {
+  return slug === undefined ? undefined : getTagBySlug(slug);
+}
+
+async function StatusFilter({ filter }: { filter: PostFilter }) {
   // Render at request time so the counts match the database.
   await connection();
-  const counts = await getPostCounts();
+  const tag = await filterTag(filter.tag);
+  const counts = await getPostCounts(tag?.id);
 
   return (
     <nav aria-label="Filter posts" className="flex h-8 rounded-lg bg-muted p-[3px] text-sm">
@@ -77,8 +91,8 @@ async function StatusFilter({ current }: { current?: PostStatus }) {
         return (
           <Link
             key={key}
-            href={postsHref(status)}
-            aria-current={current === status ? "page" : undefined}
+            href={postsHref({ ...filter, status })}
+            aria-current={filter.status === status ? "page" : undefined}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 font-medium whitespace-nowrap text-foreground/60 transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=page]:bg-background aria-[current=page]:text-foreground aria-[current=page]:shadow-sm dark:text-muted-foreground dark:aria-[current=page]:border-input dark:aria-[current=page]:bg-input/30"
           >
             {FILTER_LABELS[key]}
@@ -90,25 +104,60 @@ async function StatusFilter({ current }: { current?: PostStatus }) {
   );
 }
 
+// Which posts are filtered by tag, and how to show them all again.
+async function TagNotice({ filter }: { filter: PostFilter }) {
+  await connection();
+  const tag = await filterTag(filter.tag);
+  if (!tag) return null;
+
+  return (
+    <p className="-mt-2 mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+      Tagged
+      <Link
+        href={postsHref({ status: filter.status })}
+        title="Show posts with any tag"
+        className="flex h-6 items-center gap-1 rounded-full bg-muted pr-1.5 pl-2.5 font-medium text-foreground transition-colors outline-none hover:bg-foreground/10 focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        {tag.name}
+        <X className="size-3.5 text-muted-foreground" />
+        <span className="sr-only">(show posts with any tag)</span>
+      </Link>
+    </p>
+  );
+}
+
 const emptyMessages = {
   all: ["No posts yet", "Start with New post. Drafts stay private until you publish them."],
   draft: ["No drafts", "Posts you save without publishing wait here."],
   published: ["Nothing published yet", "Publish a draft and it shows up here and on the blog."],
 };
 
-async function PostList({ status, page }: { status?: PostStatus; page: number }) {
+const taggedEmptyMessages = {
+  all: ["No posts with this tag", "Add tags to a post in its settings."],
+  draft: ["No drafts with this tag", "Drafts you give this tag wait here."],
+  published: ["Nothing published with this tag", "Publish a post with this tag and it shows up here."],
+};
+
+async function PostList({ filter, page }: { filter: PostFilter; page: number }) {
   // Render at request time so the admin always sees the current database state.
   await connection();
-  const total = (await getPostCounts())[status ?? "all"];
+  const tag = await filterTag(filter.tag);
+  // A tag that's gone, for example after deleting it.
+  if (tag === null) redirect(postsHref({ status: filter.status }));
+
+  const { status } = filter;
+  const total = (await getPostCounts(tag?.id))[status ?? "all"];
   const pageCount = Math.max(1, Math.ceil(total / POSTS_PER_PAGE));
   // Past the last page, for example after deleting the only post on it.
-  if (page > pageCount) redirect(postsHref(status, pageCount));
+  if (page > pageCount) redirect(postsHref(filter, pageCount));
 
-  const posts = await getPosts(status, {
+  const posts = await getPosts(status, tag?.id, {
     limit: POSTS_PER_PAGE,
     offset: (page - 1) * POSTS_PER_PAGE,
   });
-  const [emptyTitle, emptyDescription] = emptyMessages[status ?? "all"];
+  const [emptyTitle, emptyDescription] = (tag ? taggedEmptyMessages : emptyMessages)[
+    status ?? "all"
+  ];
 
   if (posts.length === 0) {
     return (
@@ -140,7 +189,7 @@ async function PostList({ status, page }: { status?: PostStatus; page: number })
           <Pagination
             page={page}
             pageCount={pageCount}
-            href={(page) => postsHref(status, page)}
+            href={(page) => postsHref(filter, page)}
           />
         </div>
       )}
@@ -176,6 +225,12 @@ function PostRow({ post }: PostRowProps) {
             <>
               <Badge variant="secondary">Draft</Badge>
               <span className="shrink-0">Edited {formatShortDate(post.updatedAt)}</span>
+            </>
+          )}
+          {post.tags.length > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="truncate">{post.tags.map((tag) => tag.name).join(", ")}</span>
             </>
           )}
         </p>

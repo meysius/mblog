@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
-import { formatLongDate, formatMonthDay, formatShortDate } from "@/lib/format";
+import { marginGrid, PostLink, PostList } from "@/components/post-list";
+import { formatLongDate, formatMonthDay } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
-import { getPublishedPosts } from "@/lib/posts";
+import { getPublishedPosts, type PostSummary } from "@/lib/posts";
 import { alternates, openGraphDefaults, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -18,13 +18,8 @@ export const metadata: Metadata = {
   },
 };
 
-type Post = Awaited<ReturnType<typeof getPublishedPosts>>[number];
-
 // The newest post leads, this many follow with excerpts, and the archive lists the rest.
 const RECENT_COUNT = 6;
-
-// Dates and years sit in this left margin; titles and excerpts in the column beside it.
-const marginGrid = "grid gap-x-10 md:grid-cols-[8rem_1fr]";
 
 export default async function Home() {
   const [lead, ...rest] = await getPublishedPosts();
@@ -37,13 +32,7 @@ export default async function Home() {
       {lead ? (
         <div className="flex flex-col gap-20 sm:gap-28">
           <LeadPost post={lead} />
-          {recent.length > 0 && (
-            <ul className="flex flex-col gap-12">
-              {recent.map((post) => (
-                <RecentPost key={post.slug} post={post} />
-              ))}
-            </ul>
-          )}
+          {recent.length > 0 && <PostList posts={recent} />}
           {older.length > 0 && <Archive posts={older} />}
         </div>
       ) : (
@@ -53,22 +42,7 @@ export default async function Home() {
   );
 }
 
-// The title link stretches over its whole post, so the date, excerpt and image open it too.
-function PostLink({ post, className }: { post: Post; className?: string }) {
-  return (
-    <Link
-      href={`/posts/${post.slug}`}
-      className={cn(
-        "marker outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-3 focus-visible:after:ring-ring/50",
-        className,
-      )}
-    >
-      {post.title}
-    </Link>
-  );
-}
-
-function LeadPost({ post }: { post: Post }) {
+function LeadPost({ post }: { post: PostSummary }) {
   return (
     <article className="relative">
       <time
@@ -102,43 +76,8 @@ function LeadPost({ post }: { post: Post }) {
   );
 }
 
-function RecentPost({ post }: { post: Post }) {
-  return (
-    <li className={cn(marginGrid, "relative gap-y-2 md:items-baseline")}>
-      <time
-        dateTime={post.publishedAt.toISOString()}
-        className="text-sm text-muted-foreground"
-      >
-        {formatShortDate(post.publishedAt)}
-      </time>
-      <div className="flex gap-5 sm:gap-8">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-2xl leading-snug font-medium text-balance">
-            <PostLink post={post} className="after:-inset-x-3 after:-inset-y-3" />
-          </h2>
-          {post.excerpt && (
-            <p className="mt-2 line-clamp-2 font-serif text-lg leading-relaxed text-muted-foreground">
-              {post.excerpt}
-            </p>
-          )}
-        </div>
-        {post.featureImage && (
-          <Image
-            src={mediaSrc(post.featureImage.url)}
-            width={post.featureImage.width}
-            height={post.featureImage.height}
-            alt=""
-            sizes="(min-width: 40rem) 8rem, 5rem"
-            className="mt-1.5 aspect-[3/2] w-20 shrink-0 self-start rounded-md bg-muted object-cover sm:w-32"
-          />
-        )}
-      </div>
-    </li>
-  );
-}
-
-function groupByYear(posts: Post[]) {
-  const years = new Map<number, Post[]>();
+function groupByYear(posts: PostSummary[]) {
+  const years = new Map<number, PostSummary[]>();
   for (const post of posts) {
     const year = post.publishedAt.getFullYear();
     years.set(year, [...(years.get(year) ?? []), post]);
@@ -151,7 +90,7 @@ function groupByYear(posts: Post[]) {
 // show only in between, even after a title that wraps.
 const leader = " .".repeat(80);
 
-function Archive({ posts }: { posts: Post[] }) {
+function Archive({ posts }: { posts: PostSummary[] }) {
   return (
     <section aria-labelledby="archive" className="border-t pt-10">
       <h2 id="archive" className="font-serif text-3xl font-medium tracking-tight">

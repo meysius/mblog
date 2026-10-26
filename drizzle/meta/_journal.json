@@ -43,6 +43,13 @@
       "when": 1793031261233,
       "tag": "0005_login-limits",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793033101745,
+      "tag": "0006_tags",
+      "breakpoints": true
     }
   ]
 }

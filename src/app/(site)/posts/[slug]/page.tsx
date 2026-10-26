@@ -54,6 +54,7 @@ export async function generateMetadata({
       description: description(post),
       publishedTime: post.publishedAt.toISOString(),
       modifiedTime: post.updatedAt.toISOString(),
+      tags: post.tags.map((tag) => tag.name),
       images: images ?? undefined,
     },
     twitter: {
@@ -87,6 +88,7 @@ function jsonLd(post: Post) {
     url: absoluteUrl(`/posts/${post.slug}`),
     datePublished: post.publishedAt.toISOString(),
     dateModified: post.updatedAt.toISOString(),
+    keywords: post.tags.length > 0 ? post.tags.map((tag) => tag.name) : undefined,
     image: post.featureImage ? [absoluteUrl(mediaSrc(post.featureImage.url))] : undefined,
   };
   // Escaping "<" keeps text from the post from closing the script tag.

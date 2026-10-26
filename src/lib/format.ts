@@ -8,3 +8,5 @@ export const formatMonthDay = (date: Date) => monthDay.format(date);
 export const formatShortDate = (date: Date) => short.format(date);
 /** "October 23, 2026" */
 export const formatLongDate = (date: Date) => long.format(date);
+/** "1 post", "12 posts" */
+export const formatPostCount = (count: number) => `${count} ${count === 1 ? "post" : "posts"}`;

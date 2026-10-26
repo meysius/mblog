@@ -1,8 +1,10 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Markdown } from "@/components/markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatLongDate } from "@/lib/format";
 import { mediaSrc, type MediaImage } from "@/lib/media";
+import type { PostTag } from "@/lib/posts";
 
 type PostArticleProps = {
   post: {
@@ -14,6 +16,7 @@ type PostArticleProps = {
     publishedAt: Date | null;
     featureImage: MediaImage | null;
     featureImageAlt: string;
+    tags: PostTag[];
   };
 };
 
@@ -55,6 +58,24 @@ export function PostArticle({ post }: PostArticleProps) {
         />
       )}
       <Markdown className="max-w-[65ch]">{post.body}</Markdown>
+      {/* Where a reader finishes, ways to find more like it. */}
+      {post.tags.length > 0 && (
+        <footer className="mt-16">
+          <h2 className="sr-only">Tags</h2>
+          <ul className="flex flex-wrap gap-2">
+            {post.tags.map((tag) => (
+              <li key={tag.name}>
+                <Link
+                  href={`/tags/${tag.slug}`}
+                  className="flex h-8 items-center rounded-full border px-3.5 text-sm text-muted-foreground transition-colors outline-none hover:border-foreground/25 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  {tag.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </footer>
+      )}
     </article>
   );
 }

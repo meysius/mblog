@@ -1,4 +1,13 @@
-import { index, integer, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const posts = pgTable("posts", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -62,6 +71,35 @@ export const postMedia = pgTable(
       .references(() => media.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.postId, t.mediaId] }), index().on(t.mediaId)],
+);
+
+export const tags = pgTable(
+  "tags",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull(),
+    // The tag's page: /tags/<slug>.
+    slug: text().notNull().unique(),
+    description: text().notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // "Postgres" and "postgres" are the same tag.
+  (t) => [uniqueIndex("tags_name_unique").on(sql`lower(${t.name})`)],
+);
+
+// Which tags each post has, in the order the author gave them.
+export const postTags = pgTable(
+  "post_tags",
+  {
+    postId: integer("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+    position: integer().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.tagId] }), index().on(t.tagId)],
 );
 
 // Recent failed sign-ins per visitor address and per email (src/lib/login-limits.ts).

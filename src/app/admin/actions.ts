@@ -1,25 +1,25 @@
 "use server";
 
-import { DrizzleQueryError, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { refresh, updateTag } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
-import { DatabaseError } from "pg";
 import { db } from "@/db";
 import { posts } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { uniqueViolation } from "@/lib/db-errors";
 import { EXCERPT_MAX_LENGTH, joinLines } from "@/lib/excerpt";
 import { deleteUnusedMedia, syncPostMedia } from "@/lib/media-usage";
 import { POSTS_TAG } from "@/lib/posts";
+import { SLUG_PATTERN } from "@/lib/slug";
+import { uniqueTagNames } from "@/lib/tag-name";
+import { setPostTags } from "@/lib/tags";
 
 export type PostFormState = {
   errors?: { title?: string; slug?: string };
   // Set when an edit is saved, so the editor can confirm it.
   savedAt?: number;
 };
-
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const UNIQUE_VIOLATION = "23505";
 
 function readPostForm(formData: FormData) {
   // Submitted empty when the post has no feature image.
@@ -35,6 +35,8 @@ function readPostForm(formData: FormData) {
     featureImageId,
     featureImageAlt: featureImageId ? String(formData.get("featureImageAlt") ?? "").trim() : "",
   };
+  // One field per tag, in order.
+  const tags = uniqueTagNames(formData.getAll("tags").map(String));
   // Set by the Publish and Unpublish buttons. Any other save leaves the post as it was.
   const intent = formData.get("intent");
   const publish = intent === "publish";
@@ -45,15 +47,11 @@ function readPostForm(formData: FormData) {
   else if (!SLUG_PATTERN.test(values.slug)) {
     errors = { slug: "Use lowercase letters, numbers and single dashes." };
   }
-  return { values, publish, unpublish, errors };
+  return { values, tags, publish, unpublish, errors };
 }
 
 function slugTakenErrors(e: unknown, slug: string) {
-  if (
-    e instanceof DrizzleQueryError &&
-    e.cause instanceof DatabaseError &&
-    e.cause.code === UNIQUE_VIOLATION
-  ) {
+  if (uniqueViolation(e) === "posts_slug_unique") {
     return { slug: `Another post already uses /posts/${slug}. Pick a different URL.` };
   }
   throw e;
@@ -64,7 +62,7 @@ export async function createPost(
   formData: FormData,
 ): Promise<PostFormState> {
   await requireUser();
-  const { values, publish, errors } = readPostForm(formData);
+  const { values, tags, publish, errors } = readPostForm(formData);
   if (errors) return { errors };
 
   let id: number;
@@ -74,6 +72,7 @@ export async function createPost(
         .insert(posts)
         .values({ ...values, publishedAt: publish ? sql`now()` : null })
         .returning({ id: posts.id });
+      await setPostTags(tx, id, tags);
       await syncPostMedia(tx, id, values);
       return id;
     });
@@ -92,7 +91,7 @@ export async function updatePost(
   formData: FormData,
 ): Promise<PostFormState> {
   await requireUser();
-  const { values, publish, unpublish, errors } = readPostForm(formData);
+  const { values, tags, publish, unpublish, errors } = readPostForm(formData);
   if (errors) return { errors };
 
   // The images this save stopped using, or undefined if there's no such post.
@@ -109,7 +108,9 @@ export async function updatePost(
         })
         .where(eq(posts.id, id))
         .returning({ id: posts.id });
-      return updated && syncPostMedia(tx, id, values);
+      if (!updated) return undefined;
+      await setPostTags(tx, id, tags);
+      return syncPostMedia(tx, id, values);
     });
   } catch (e) {
     return { errors: slugTakenErrors(e, values.slug) };
