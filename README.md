@@ -1,13 +1,15 @@
 # mblog
 
-Personal blog and CMS: Next.js 16 (App Router, Cache Components), Drizzle ORM, Postgres 18.
+Personal blog and CMS: Next.js 16 (App Router, Cache Components), Drizzle ORM, Postgres 16 or newer.
 
 ## Setup
+
+Postgres runs natively, for example Homebrew's: `brew install postgresql@16 && brew services start postgresql@16`. `.env.example` points at it on `localhost:5432` as the `postgres` user; change `DATABASE_URL` if yours differs.
 
 ```bash
 cp .env.example .env
 pnpm install
-pnpm db:up       # Postgres in Docker on localhost:5433
+pnpm db:create   # the database DATABASE_URL names
 pnpm db:migrate
 pnpm db:seed     # optional: 100 sample posts, with tags
 pnpm dev
