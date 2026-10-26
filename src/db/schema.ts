@@ -63,3 +63,12 @@ export const postMedia = pgTable(
   },
   (t) => [primaryKey({ columns: [t.postId, t.mediaId] }), index().on(t.mediaId)],
 );
+
+// Recent failed sign-ins per visitor address and per email (src/lib/login-limits.ts).
+export const loginLimits = pgTable("login_limits", {
+  // "address:<ip>" or "email:<email>"
+  key: text().primaryKey(),
+  failures: integer().notNull(),
+  // When the count starts over.
+  resetsAt: timestamp("resets_at", { withTimezone: true }).notNull(),
+});
