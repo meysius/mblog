@@ -1,11 +1,9 @@
-import { ArrowUpRight, FileText, PenLine, Plus, X } from "lucide-react";
+import { PenLine, Plus, X } from "lucide-react";
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Empty,
@@ -15,11 +13,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatShortDate } from "@/lib/format";
-import { mediaSrc, type MediaImage } from "@/lib/media";
 import { getPostCounts, getPosts } from "@/lib/posts";
 import { getTagBySlug } from "@/lib/tags";
-import { cn } from "@/lib/utils";
 import { Pagination } from "./pagination";
 import {
   FILTER_LABELS,
@@ -30,6 +25,7 @@ import {
   postsHref,
   type PostFilter,
 } from "./post-filters";
+import { PostRow, PostRowsSkeleton } from "./post-rows";
 
 export const metadata: Metadata = { title: "Posts" };
 
@@ -61,7 +57,7 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
         {params.then(({ filter }) => filter.tag && <TagNotice filter={filter} />)}
       </Suspense>
 
-      <Suspense fallback={<PostListSkeleton />}>
+      <Suspense fallback={<PostRowsSkeleton />}>
         {params.then(({ filter, page }) => (
           <PostList filter={filter} page={page} />
         ))}
@@ -178,7 +174,7 @@ async function PostList({ filter, page }: { filter: PostFilter; page: number }) 
     <>
       <ul className="-mx-3">
         {posts.map((post) => (
-          <PostRow key={post.id} post={post} />
+          <PostRow key={post.id} kind="post" post={post} />
         ))}
       </ul>
       {pageCount > 1 && (
@@ -194,98 +190,5 @@ async function PostList({ filter, page }: { filter: PostFilter; page: number }) 
         </div>
       )}
     </>
-  );
-}
-
-type PostRowProps = {
-  post: Awaited<ReturnType<typeof getPosts>>[number];
-};
-
-function PostRow({ post }: PostRowProps) {
-  const { publishedAt } = post;
-  const [readerHref, readerLabel] = publishedAt
-    ? [`/posts/${post.slug}`, "View on the blog"]
-    : [`/admin/posts/${post.id}/preview`, "Preview draft"];
-
-  return (
-    // The title link covers the whole row; the reader link sits above it.
-    <li className="group relative flex items-center gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-muted/60">
-      <Thumbnail image={post.featureImage} />
-      <div className="min-w-0 flex-1">
-        <Link
-          href={`/admin/posts/${post.id}`}
-          className="font-medium wrap-anywhere outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-        >
-          {post.title}
-        </Link>
-        <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-          {publishedAt ? (
-            <span className="shrink-0">Published {formatShortDate(publishedAt)}</span>
-          ) : (
-            <>
-              <Badge variant="secondary">Draft</Badge>
-              <span className="shrink-0">Edited {formatShortDate(post.updatedAt)}</span>
-            </>
-          )}
-          {post.tags.length > 0 && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="truncate">{post.tags.map((tag) => tag.name).join(", ")}</span>
-            </>
-          )}
-        </p>
-      </div>
-      <Link
-        href={readerHref}
-        target="_blank"
-        aria-label={`${readerLabel}: ${post.title}`}
-        title={readerLabel}
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "icon-sm" }),
-          "relative text-muted-foreground hover:bg-background pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100",
-        )}
-      >
-        <ArrowUpRight />
-      </Link>
-    </li>
-  );
-}
-
-const thumbnailBox = "h-12 w-18 shrink-0 rounded-md bg-muted";
-
-// The feature image, or a placeholder so titles line up either way.
-function Thumbnail({ image }: { image: MediaImage | null }) {
-  return image ? (
-    <Image
-      src={mediaSrc(image.url)}
-      width={image.width}
-      height={image.height}
-      alt=""
-      sizes="4.5rem"
-      className={cn(thumbnailBox, "object-cover")}
-    />
-  ) : (
-    <div
-      aria-hidden
-      className={cn(thumbnailBox, "flex items-center justify-center text-muted-foreground/50")}
-    >
-      <FileText className="size-5" />
-    </div>
-  );
-}
-
-function PostListSkeleton() {
-  return (
-    <div aria-hidden>
-      {[0, 1, 2].map((row) => (
-        <div key={row} className="flex items-center gap-4 py-3">
-          <Skeleton className={thumbnailBox} />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-3.5 w-1/3" />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }

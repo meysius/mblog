@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatShortDate } from "@/lib/format";
 import { IMAGE_TYPES, uploadImage, type MediaImage } from "@/lib/media";
+import { listPath, type PostKind, previewPath, readerPath } from "@/lib/post-kind";
 import type { EditablePost, PostTag } from "@/lib/posts";
 import { EXCERPT_MAX_LENGTH, joinLines } from "@/lib/excerpt";
 import { slugify } from "@/lib/slug";
@@ -68,14 +69,17 @@ function subscribeToWidth(onChange: () => void) {
 }
 
 type PostEditorProps = {
-  /** The saved post when editing; omitted for a new post. */
+  /** Pages have no tags, and are at /<slug> rather than /posts/<slug>. */
+  kind: PostKind;
+  /** The saved post or page when editing; omitted for a new one. */
   post?: EditablePost;
-  /** Every saved tag, for the tag field to suggest. */
-  tagOptions: PostTag[];
+  /** Every saved tag, for the tag field to suggest. Posts only. */
+  tagOptions?: PostTag[];
   action: (state: PostFormState, formData: FormData) => Promise<PostFormState>;
 };
 
-export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
+export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorProps) {
+  const Noun = kind === "page" ? "Page" : "Post";
   const [state, formAction, pending] = useActionState(action, initialState);
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
@@ -159,8 +163,8 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
     if (!tab || pending) return;
     previewTab.current = null;
     if (state.errors || !post) tab.close();
-    else tab.location.href = `/admin/posts/${post.id}/preview`;
-  }, [state, pending, post]);
+    else tab.location.href = previewPath(kind, post.id);
+  }, [state, pending, post, kind]);
 
   const busy = pending || uploads > 0;
 
@@ -170,11 +174,11 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
         <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Link
-              href="/admin"
+              href={listPath(kind)}
               className={cn(buttonVariants({ variant: "ghost" }), "text-muted-foreground")}
             >
               <ArrowLeft data-icon="inline-start" />
-              <span className="max-sm:sr-only">Posts</span>
+              <span className="max-sm:sr-only">{Noun}s</span>
             </Link>
             {/* No room on phones, where the settings panel shows the status instead. */}
             <div className="flex min-w-0 items-center gap-2.5 text-sm max-sm:sr-only">
@@ -259,7 +263,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Post settings"
+              aria-label={`${Noun} settings`}
               aria-controls={settingsId}
               aria-expanded={showSettings}
               className="text-muted-foreground aria-expanded:text-foreground"
@@ -339,7 +343,11 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
                     id="excerpt-hint"
                     className="mt-2 hidden justify-between gap-4 text-xs text-muted-foreground peer-focus:flex"
                   >
-                    <span>Shown under the title, in post lists and in search results.</span>
+                    <span>
+                      {kind === "page"
+                        ? "Shown under the title and in search results."
+                        : "Shown under the title, in post lists and in search results."}
+                    </span>
                     <span className="tabular-nums">
                       {excerpt.length}/{EXCERPT_MAX_LENGTH}
                     </span>
@@ -379,6 +387,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
               <TabsContent value="preview">
                 {title.trim() || excerpt.trim() || body.trim() || featureImage ? (
                   <PostArticle
+                    kind={kind}
                     post={{
                       title: title.trim() || "Untitled",
                       excerpt: excerpt.trim(),
@@ -403,7 +412,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
           {/* Always mounted, so its fields are submitted while it's closed. */}
           <aside
             id={settingsId}
-            aria-label="Post settings"
+            aria-label={`${Noun} settings`}
             className={cn(
               settingsOpen === undefined ? "hidden lg:flex" : settingsOpen ? "flex" : "hidden",
               "fixed inset-x-0 top-14 bottom-0 z-30 flex-col gap-7 overflow-y-auto border-l bg-background p-5 shadow-lg sm:left-auto sm:w-80",
@@ -411,7 +420,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
             )}
           >
             <div className="-my-1 flex items-center justify-between lg:hidden">
-              <h2 className="font-medium">Post settings</h2>
+              <h2 className="font-medium">{Noun} settings</h2>
               <Button
                 type="button"
                 variant="ghost"
@@ -440,11 +449,11 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
                   {publishedAt ? (
                     <>
                       <Link
-                        href={`/posts/${post.slug}`}
+                        href={readerPath(kind, post.slug)}
                         target="_blank"
                         className={cn(buttonVariants({ variant: "outline" }))}
                       >
-                        View post
+                        View {kind}
                         <ArrowUpRight data-icon="inline-end" />
                       </Link>
                       <SaveButton
@@ -466,7 +475,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
                       onClick={(e) => {
                         const form = e.currentTarget.form!;
                         if (!dirty) {
-                          window.open(`/admin/posts/${post.id}/preview`, "_blank");
+                          window.open(previewPath(kind, post.id), "_blank");
                         } else if (form.reportValidity()) {
                           previewTab.current = window.open("", "_blank");
                           form.requestSubmit();
@@ -485,7 +494,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
               <FieldLabel htmlFor="slug">URL</FieldLabel>
               <InputGroup>
                 <InputGroupAddon>
-                  <InputGroupText>/posts/</InputGroupText>
+                  <InputGroupText>{readerPath(kind, "")}</InputGroupText>
                 </InputGroupAddon>
                 <InputGroupInput
                   id="slug"
@@ -493,7 +502,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
                   required
                   pattern="[a-z0-9]+(-[a-z0-9]+)*"
                   title="Lowercase letters, numbers and single dashes"
-                  placeholder="my-post"
+                  placeholder={kind === "page" ? "about" : "my-post"}
                   value={slug}
                   aria-invalid={Boolean(state.errors?.slug)}
                   onChange={(e) => {
@@ -509,15 +518,16 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
               ) : (
                 <FieldDescription>
                   {post
-                    ? "Changing it breaks existing links to the post."
+                    ? `Changing it breaks existing links to the ${kind}.`
                     : "Filled in from the title. Edit it to choose your own."}
                 </FieldDescription>
               )}
             </Field>
 
-            <TagField value={tags} onChange={setTags} options={tagOptions} />
+            {kind === "post" && <TagField value={tags} onChange={setTags} options={tagOptions} />}
 
             <FeatureImageField
+              kind={kind}
               image={featureImage}
               alt={featureImageAlt}
               onImageChange={setFeatureImage}
@@ -527,7 +537,7 @@ export function PostEditor({ post, tagOptions, action }: PostEditorProps) {
 
             {post && (
               <div className="-mx-5 mt-auto border-t px-3 pt-4">
-                <DeletePostButton id={post.id} title={post.title} />
+                <DeletePostButton kind={kind} id={post.id} title={post.title} />
               </div>
             )}
           </aside>
@@ -560,7 +570,7 @@ function SaveButton({ intent, pendingLabel, disabled, children, ...props }: Save
   );
 }
 
-function DeletePostButton({ id, title }: { id: number; title: string }) {
+function DeletePostButton({ kind, id, title }: { kind: PostKind; id: number; title: string }) {
   const [deleting, startDeleting] = useTransition();
 
   return (
@@ -575,11 +585,11 @@ function DeletePostButton({ id, title }: { id: number; title: string }) {
         }
       >
         <Trash2 data-icon="inline-start" />
-        Delete post
+        Delete {kind}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this post?</AlertDialogTitle>
+          <AlertDialogTitle>Delete this {kind}?</AlertDialogTitle>
           <AlertDialogDescription>
             “{title}” will be removed from the blog and the admin. This can’t be undone.
           </AlertDialogDescription>
@@ -591,7 +601,7 @@ function DeletePostButton({ id, title }: { id: number; title: string }) {
             disabled={deleting}
             onClick={() => startDeleting(() => deletePost(id))}
           >
-            {deleting ? "Deleting…" : "Delete post"}
+            {deleting ? "Deleting…" : `Delete ${kind}`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

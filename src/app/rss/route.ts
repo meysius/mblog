@@ -1,7 +1,7 @@
 import { excerpt, markdownToHtml } from "@/lib/markdown";
 import { mediaSrc } from "@/lib/media";
 import { getFeedPosts } from "@/lib/posts";
-import { absoluteUrl, RSS_PATH, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
+import { absoluteUrl, getSiteSettings, RSS_PATH } from "@/lib/site";
 
 // The newest posts the feed carries. Feed readers keep the ones they've already fetched.
 const FEED_SIZE = 20;
@@ -24,7 +24,7 @@ function cdata(html: string) {
 }
 
 export async function GET() {
-  const posts = await getFeedPosts(FEED_SIZE);
+  const [posts, site] = await Promise.all([getFeedPosts(FEED_SIZE), getSiteSettings()]);
   const lastChange = Math.max(...posts.map((post) => post.updatedAt.getTime()));
 
   const items = posts.map((post) => {
@@ -50,9 +50,9 @@ export async function GET() {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>${escapeXml(SITE_NAME)}</title>
+    <title>${escapeXml(site.title)}</title>
     <link>${escapeXml(absoluteUrl("/"))}</link>
-    <description>${escapeXml(SITE_DESCRIPTION)}</description>
+    <description>${escapeXml(site.description)}</description>
     <language>en</language>
     <atom:link href="${escapeXml(absoluteUrl(RSS_PATH))}" rel="self" type="application/rss+xml"/>${
       posts.length > 0

@@ -68,7 +68,7 @@ export function useBodyImages(
     const el = textarea.current;
     if (!el) return;
     const images = files.filter((file) => file.type.startsWith("image/"));
-    setError(images.length < files.length ? "Only images can be added to a post." : null);
+    setError(images.length < files.length ? "Only images can be added here." : null);
 
     el.focus();
     for (const file of images) {

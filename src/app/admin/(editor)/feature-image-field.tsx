@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { IMAGE_TYPES, mediaSrc, type MediaImage } from "@/lib/media";
+import type { PostKind } from "@/lib/post-kind";
 
 type FeatureImageFieldProps = {
+  kind: PostKind;
   image: MediaImage | null;
   alt: string;
   onImageChange: (image: MediaImage | null) => void;
@@ -17,6 +19,7 @@ type FeatureImageFieldProps = {
 };
 
 export function FeatureImageField({
+  kind,
   image,
   alt,
   onImageChange,
@@ -144,7 +147,7 @@ export function FeatureImageField({
             <FieldError>{error}</FieldError>
           ) : (
             <FieldDescription>
-              Shown at the top of the post. You can also drop one here.
+              Shown at the top of the {kind}. You can also drop one here.
             </FieldDescription>
           )}
         </>

@@ -1,13 +1,25 @@
 import Link from "next/link";
-import { SITE_NAME } from "@/lib/site";
+import { Suspense } from "react";
+import { SiteNav, SiteNavLinks } from "@/components/site-nav";
+import { getSiteSettings } from "@/lib/site";
 
-export function SiteShell({ children }: { children: React.ReactNode }) {
+export async function SiteShell({ children }: { children: React.ReactNode }) {
+  const { title, navigation } = await getSiteSettings();
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6">
-      <header className="pt-12 pb-14 sm:pt-16 sm:pb-20">
+      {/* The links sit beside the title, or wrap below it on narrow screens. */}
+      <header className="flex flex-wrap items-baseline justify-between gap-x-10 gap-y-3 pt-12 pb-14 sm:pt-16 sm:pb-20">
         <Link href="/" className="font-serif text-2xl font-semibold tracking-tight">
-          {SITE_NAME}
+          {title}
         </Link>
+        {navigation.length > 0 && (
+          <nav aria-label="Site">
+            <Suspense fallback={<SiteNavLinks links={navigation} />}>
+              <SiteNav links={navigation} />
+            </Suspense>
+          </nav>
+        )}
       </header>
       <main className="flex-1 pb-24">{children}</main>
     </div>

@@ -1,12 +1,14 @@
 "use client";
 
-import { Files, Tags } from "lucide-react";
+import { Files, Settings, StickyNote, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const sections = [
   { href: "/admin", label: "Posts", icon: Files },
+  { href: "/admin/pages", label: "Pages", icon: StickyNote },
   { href: "/admin/tags", label: "Tags", icon: Tags },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 // Posts is the dashboard's home, so only its own page counts; a section's subpages count too.

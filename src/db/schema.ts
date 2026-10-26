@@ -1,33 +1,47 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const posts = pgTable("posts", {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  slug: text().notNull().unique(),
-  title: text().notNull(),
-  body: text().notNull().default(""),
-  // Written by the author. Empty means post lists use the start of the body instead.
-  excerpt: text().notNull().default(""),
-  // null = draft; a past date = published; a future date = scheduled
-  publishedAt: timestamp("published_at", { withTimezone: true }),
-  featureImageId: integer("feature_image_id").references(() => media.id, {
-    onDelete: "set null",
-  }),
-  featureImageAlt: text("feature_image_alt").notNull().default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
+export const posts = pgTable(
+  "posts",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    // A post is dated and listed on the blog. A page stands on its own at /<slug>,
+    // like /about, and has no date or tags (src/lib/post-kind.ts).
+    kind: text({ enum: ["post", "page"] }).notNull().default("post"),
+    slug: text().notNull(),
+    title: text().notNull(),
+    body: text().notNull().default(""),
+    // Written by the author. Empty means post lists use the start of the body instead.
+    excerpt: text().notNull().default(""),
+    // null = draft; a past date = published; a future date = scheduled
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    featureImageId: integer("feature_image_id").references(() => media.id, {
+      onDelete: "set null",
+    }),
+    featureImageAlt: text("feature_image_alt").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    check("posts_kind_check", sql`${t.kind} in ('post', 'page')`),
+    // A post and a page can share a slug, since they're at /posts/<slug> and /<slug>.
+    unique().on(t.kind, t.slug),
+  ],
+);
 
 export const users = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -110,3 +124,17 @@ export const loginLimits = pgTable("login_limits", {
   // When the count starts over.
   resetsAt: timestamp("resets_at", { withTimezone: true }).notNull(),
 });
+
+// The site's settings, in a single row. Until they're first saved, the site uses
+// the defaults in src/lib/site.ts.
+export const siteSettings = pgTable(
+  "site_settings",
+  {
+    id: integer().primaryKey().default(1),
+    title: text().notNull(),
+    description: text().notNull(),
+    // The links in the site's header, in order.
+    navigation: jsonb().$type<{ label: string; url: string }[]>().notNull(),
+  },
+  (t) => [check("site_settings_single_row", sql`${t.id} = 1`)],
+);

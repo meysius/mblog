@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
-import { alternates, openGraphDefaults, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
+import { alternates, getSiteSettings, openGraphDefaults, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -14,14 +14,17 @@ const schibstedGrotesk = Schibsted_Grotesk({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  // Relative URLs in metadata, like /posts/hello, resolve against this.
-  metadataBase: new URL(SITE_URL),
-  title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
-  description: SITE_DESCRIPTION,
-  alternates: alternates(),
-  openGraph: openGraphDefaults,
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const site = await getSiteSettings();
+  return {
+    // Relative URLs in metadata, like /posts/hello, resolve against this.
+    metadataBase: new URL(SITE_URL),
+    title: { default: site.title, template: `%s | ${site.title}` },
+    description: site.description,
+    alternates: alternates(site),
+    openGraph: openGraphDefaults(site),
+  };
+}
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

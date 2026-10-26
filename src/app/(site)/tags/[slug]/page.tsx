@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PostList } from "@/components/post-list";
 import { formatPostCount } from "@/lib/format";
 import { getPublishedPostsTagged } from "@/lib/posts";
-import { alternates, openGraphDefaults } from "@/lib/site";
+import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { getPublishedTag, getPublishedTags } from "@/lib/tags";
 
 // Rendered like post pages (see posts/[slug]/page.tsx): in full before anything is
@@ -32,16 +32,16 @@ function description(tag: Tag) {
 }
 
 export async function generateMetadata({ params }: PageProps<"/tags/[slug]">): Promise<Metadata> {
-  const tag = await getTag((await params).slug);
+  const [tag, site] = await Promise.all([getTag((await params).slug), getSiteSettings()]);
   if (!tag) return { title: "Page not found" };
 
   const path = `/tags/${tag.slug}`;
   return {
     title: tag.name,
     description: description(tag),
-    alternates: alternates(path),
+    alternates: alternates(site, path),
     openGraph: {
-      ...openGraphDefaults,
+      ...openGraphDefaults(site),
       type: "website",
       url: path,
       title: tag.name,

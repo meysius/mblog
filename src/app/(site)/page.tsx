@@ -4,31 +4,34 @@ import { marginGrid, PostLink, PostList } from "@/components/post-list";
 import { formatLongDate, formatMonthDay } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
 import { getPublishedPosts, type PostSummary } from "@/lib/posts";
-import { alternates, openGraphDefaults, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
+import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = {
-  alternates: alternates("/"),
-  openGraph: {
-    ...openGraphDefaults,
-    type: "website",
-    url: "/",
-    title: SITE_NAME,
-    description: SITE_DESCRIPTION,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const site = await getSiteSettings();
+  return {
+    alternates: alternates(site, "/"),
+    openGraph: {
+      ...openGraphDefaults(site),
+      type: "website",
+      url: "/",
+      title: site.title,
+      description: site.description,
+    },
+  };
+}
 
 // The newest post leads, this many follow with excerpts, and the archive lists the rest.
 const RECENT_COUNT = 6;
 
 export default async function Home() {
-  const [lead, ...rest] = await getPublishedPosts();
+  const [[lead, ...rest], site] = await Promise.all([getPublishedPosts(), getSiteSettings()]);
   const recent = rest.slice(0, RECENT_COUNT);
   const older = rest.slice(RECENT_COUNT);
 
   return (
     <>
-      <h1 className="sr-only">{SITE_NAME}</h1>
+      <h1 className="sr-only">{site.title}</h1>
       {lead ? (
         <div className="flex flex-col gap-20 sm:gap-28">
           <LeadPost post={lead} />

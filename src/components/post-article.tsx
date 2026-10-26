@@ -4,38 +4,54 @@ import { Markdown } from "@/components/markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatLongDate } from "@/lib/format";
 import { mediaSrc, type MediaImage } from "@/lib/media";
+import type { PostKind } from "@/lib/post-kind";
 import type { PostTag } from "@/lib/posts";
+import { cn } from "@/lib/utils";
 
 type PostArticleProps = {
+  /** A page shows no date. */
+  kind?: PostKind;
   post: {
     title: string;
     body: string;
     /** Shown under the title when the author wrote one. */
     excerpt: string;
-    /** Null for a draft, which only the preview shows. */
-    publishedAt: Date | null;
+    /** Null for a draft, which only the preview shows. Posts only. */
+    publishedAt?: Date | null;
     featureImage: MediaImage | null;
     featureImageAlt: string;
-    tags: PostTag[];
+    /** Posts only. */
+    tags?: PostTag[];
   };
 };
 
-/** A post as readers see it. Shared by the post page and the admin preview. */
-export function PostArticle({ post }: PostArticleProps) {
+/**
+ * A post or page as readers see it. Shared by the post and page routes, the
+ * editor's Preview and the admin preview.
+ */
+export function PostArticle({ kind = "post", post }: PostArticleProps) {
+  const tags = post.tags ?? [];
+
   return (
     <article>
       <header className="mb-10">
-        {post.publishedAt ? (
-          <time
-            dateTime={post.publishedAt.toISOString()}
-            className="text-sm text-muted-foreground"
-          >
-            {formatLongDate(post.publishedAt)}
-          </time>
-        ) : (
-          <p className="text-sm text-muted-foreground">Not published yet</p>
-        )}
-        <h1 className="mt-3 font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl">
+        {kind === "post" &&
+          (post.publishedAt ? (
+            <time
+              dateTime={post.publishedAt.toISOString()}
+              className="text-sm text-muted-foreground"
+            >
+              {formatLongDate(post.publishedAt)}
+            </time>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not published yet</p>
+          ))}
+        <h1
+          className={cn(
+            "font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl",
+            kind === "post" && "mt-3",
+          )}
+        >
           {post.title}
         </h1>
         {post.excerpt && (
@@ -59,11 +75,11 @@ export function PostArticle({ post }: PostArticleProps) {
       )}
       <Markdown className="max-w-[65ch]">{post.body}</Markdown>
       {/* Where a reader finishes, ways to find more like it. */}
-      {post.tags.length > 0 && (
+      {tags.length > 0 && (
         <footer className="mt-16">
           <h2 className="sr-only">Tags</h2>
           <ul className="flex flex-wrap gap-2">
-            {post.tags.map((tag) => (
+            {tags.map((tag) => (
               <li key={tag.name}>
                 <Link
                   href={`/tags/${tag.slug}`}

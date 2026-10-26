@@ -1,8 +1,11 @@
 import "server-only";
 import type { Metadata } from "next";
-
-export const SITE_NAME = "mblog";
-export const SITE_DESCRIPTION = "A personal blog";
+import { cacheLife, cacheTag } from "next/cache";
+import { db } from "@/db";
+import { siteSettings } from "@/db/schema";
+import { requireUser } from "@/lib/auth";
+import { mediaSrc, type MediaImage } from "@/lib/media";
+import type { SiteSettings } from "@/lib/site-settings";
 
 function siteUrl() {
   const value = process.env.SITE_URL;
@@ -34,18 +37,56 @@ export function absoluteUrl(path: string) {
 
 export const RSS_PATH = "/rss";
 
+/** What the site uses until its settings are first saved. */
+const DEFAULT_SETTINGS: SiteSettings = {
+  title: "mblog",
+  description: "A personal blog",
+  navigation: [],
+};
+
+const settingsColumns = {
+  title: siteSettings.title,
+  description: siteSettings.description,
+  navigation: siteSettings.navigation,
+};
+
+// Cached like the posts (see src/lib/posts.ts), until a save calls updateTag("settings").
+export const SETTINGS_TAG = "settings";
+
+/** The site's title, description and header links. */
+export async function getSiteSettings(): Promise<SiteSettings> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(SETTINGS_TAG);
+  const [settings] = await db.select(settingsColumns).from(siteSettings).limit(1);
+  return settings ?? DEFAULT_SETTINGS;
+}
+
+/** The saved settings, uncached, for the admin's settings form. */
+export async function getSettingsForEditing(): Promise<SiteSettings> {
+  await requireUser();
+  const [settings] = await db.select(settingsColumns).from(siteSettings).limit(1);
+  return settings ?? DEFAULT_SETTINGS;
+}
+
 // Metadata merges shallowly, so a page that sets alternates or openGraph replaces
-// the root layout's. Pages spread these to keep the shared parts.
+// the root layout's. Pages use these to keep the shared parts.
 
 /** Links feed readers to the RSS feed, plus the page's canonical URL if it has one. */
-export function alternates(canonical?: string): Metadata["alternates"] {
+export function alternates(site: SiteSettings, canonical?: string): Metadata["alternates"] {
   return {
     canonical,
-    types: { "application/rss+xml": [{ url: RSS_PATH, title: SITE_NAME }] },
+    types: { "application/rss+xml": [{ url: RSS_PATH, title: site.title }] },
   };
 }
 
-export const openGraphDefaults = {
-  siteName: SITE_NAME,
-  locale: "en_US",
-} satisfies Metadata["openGraph"];
+export function openGraphDefaults(site: SiteSettings) {
+  return { siteName: site.title, locale: "en_US" } satisfies Metadata["openGraph"];
+}
+
+/** A feature image as share previews show it. */
+export function shareImages(image: MediaImage | null, alt: string) {
+  return image
+    ? [{ url: mediaSrc(image.url), width: image.width, height: image.height, alt: alt || undefined }]
+    : undefined;
+}

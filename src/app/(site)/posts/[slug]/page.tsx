@@ -4,7 +4,13 @@ import { PostArticle } from "@/components/post-article";
 import { excerpt } from "@/lib/markdown";
 import { mediaSrc } from "@/lib/media";
 import { getPublishedPost, getPublishedPosts } from "@/lib/posts";
-import { absoluteUrl, alternates, openGraphDefaults } from "@/lib/site";
+import {
+  absoluteUrl,
+  alternates,
+  getSiteSettings,
+  openGraphDefaults,
+  shareImages,
+} from "@/lib/site";
 
 // The whole page renders before anything is sent, so a missing post gets a real
 // 404 status rather than a 200 with "Page not found" streamed into it. Published
@@ -30,24 +36,20 @@ function description(post: Post) {
 export async function generateMetadata({
   params,
 }: PageProps<"/posts/[slug]">): Promise<Metadata> {
-  const post = await getPublishedPost((await params).slug);
+  const [post, site] = await Promise.all([
+    getPublishedPost((await params).slug),
+    getSiteSettings(),
+  ]);
   if (!post) return { title: "Page not found" };
 
   const path = `/posts/${post.slug}`;
-  const images = post.featureImage && [
-    {
-      url: mediaSrc(post.featureImage.url),
-      width: post.featureImage.width,
-      height: post.featureImage.height,
-      alt: post.featureImageAlt || undefined,
-    },
-  ];
+  const images = shareImages(post.featureImage, post.featureImageAlt);
   return {
     title: post.title,
     description: description(post),
-    alternates: alternates(path),
+    alternates: alternates(site, path),
     openGraph: {
-      ...openGraphDefaults,
+      ...openGraphDefaults(site),
       type: "article",
       url: path,
       title: post.title,
@@ -55,13 +57,13 @@ export async function generateMetadata({
       publishedTime: post.publishedAt.toISOString(),
       modifiedTime: post.updatedAt.toISOString(),
       tags: post.tags.map((tag) => tag.name),
-      images: images ?? undefined,
+      images,
     },
     twitter: {
       card: images ? "summary_large_image" : "summary",
       title: post.title,
       description: description(post),
-      images: images ?? undefined,
+      images,
     },
   };
 }

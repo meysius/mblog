@@ -19,5 +19,11 @@ export default function NewPostPage() {
 async function NewPost() {
   // Render at request time so the tag field suggests every saved tag.
   await connection();
-  return <PostEditor tagOptions={await getTagOptions()} action={createPost} />;
+  return (
+    <PostEditor
+      kind="post"
+      tagOptions={await getTagOptions()}
+      action={createPost.bind(null, "post")}
+    />
+  );
 }

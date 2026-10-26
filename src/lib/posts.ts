@@ -14,13 +14,17 @@ export const POSTS_TAG = "posts";
 
 export const isPublished = lte(posts.publishedAt, sql`now()`);
 
+// Pages are rows in the posts table too (src/lib/post-kind.ts). Lists, the feed
+// and post pages show posts only; pages have their own reads in src/lib/pages.ts.
+export const isPost = eq(posts.kind, "post");
+
 // isPublished guarantees publishedAt is set; narrow the type to match.
 function asPublished<T extends { publishedAt: Date | null }>(row: T) {
   return { ...row, publishedAt: row.publishedAt! };
 }
 
 // Selected from a left join of media on posts.featureImageId; all null when there's no image.
-const featureImageColumns = {
+export const featureImageColumns = {
   id: media.id,
   filename: media.filename,
   width: media.width,
@@ -51,7 +55,7 @@ function tagged(tagId: number | undefined) {
       );
 }
 
-function toMediaImage(
+export function toMediaImage(
   image: { id: number; filename: string; width: number; height: number } | null,
 ): MediaImage | null {
   if (!image) return null;
@@ -89,7 +93,7 @@ async function getPostSummaries(tagId?: number) {
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
-    .where(and(isPublished, tagged(tagId)))
+    .where(and(isPost, isPublished, tagged(tagId)))
     .orderBy(desc(posts.publishedAt));
   return rows.map(({ writtenExcerpt, opening, featureImage, ...row }) => ({
     ...asPublished(row),
@@ -119,7 +123,7 @@ export async function getPublishedPost(slug: string) {
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
-    .where(and(eq(posts.slug, slug), isPublished))
+    .where(and(isPost, eq(posts.slug, slug), isPublished))
     .limit(1);
   return post ? { ...asPublished(post), featureImage: toMediaImage(post.featureImage) } : null;
 }
@@ -145,7 +149,7 @@ export async function getFeedPosts(limit: number) {
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
-    .where(isPublished)
+    .where(and(isPost, isPublished))
     .orderBy(desc(posts.publishedAt))
     .limit(limit);
   return rows.map((row) => ({ ...asPublished(row), featureImage: toMediaImage(row.featureImage) }));
@@ -161,7 +165,7 @@ const hasStatus = {
 
 // Admin reads are never cached, and check the session themselves.
 
-/** One page of posts, newest first, optionally only those with a tag. */
+/** One page of posts, newest first, optionally only those with a tag. Pages aren't included. */
 export async function getPosts(
   status: PostStatus | undefined,
   tagId: number | undefined,
@@ -180,7 +184,7 @@ export async function getPosts(
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
-    .where(and(status && hasStatus[status], tagged(tagId)))
+    .where(and(isPost, status && hasStatus[status], tagged(tagId)))
     // The id breaks ties, so no post shows up on two pages or none.
     .orderBy(desc(posts.createdAt), desc(posts.id))
     .limit(limit)
@@ -194,15 +198,17 @@ export const getPostCounts = cache(async (tagId?: number) => {
   const [{ all, published }] = await db
     .select({ all: count(), published: count(posts.publishedAt) })
     .from(posts)
-    .where(tagged(tagId));
+    .where(and(isPost, tagged(tagId)));
   return { all, draft: all - published, published };
 });
 
+/** A post or a page, for its editor and preview. */
 export async function getPostForEditing(id: number) {
   await requireUser();
   const [post] = await db
     .select({
       id: posts.id,
+      kind: posts.kind,
       slug: posts.slug,
       title: posts.title,
       body: posts.body,

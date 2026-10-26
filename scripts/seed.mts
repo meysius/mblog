@@ -409,7 +409,9 @@ const taken = new Set(
     await db
       .select({ slug: posts.slug })
       .from(posts)
-      .where(inArray(posts.slug, samples.map((s) => s.post.slug)))
+      .where(
+        and(eq(posts.kind, "post"), inArray(posts.slug, samples.map((s) => s.post.slug))),
+      )
   ).map(({ slug }) => slug),
 );
 const toAdd = samples.filter((sample) => !taken.has(sample.post.slug));
@@ -456,6 +458,7 @@ try {
       .from(posts)
       .where(
         and(
+          eq(posts.kind, "post"),
           inArray(posts.slug, [...tagsBySlug.keys()]),
           notExists(tx.select().from(postTags).where(eq(postTags.postId, posts.id))),
         ),

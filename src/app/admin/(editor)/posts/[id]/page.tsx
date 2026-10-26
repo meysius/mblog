@@ -25,9 +25,15 @@ async function EditPost({ id }: { id: number }) {
   await connection();
   if (!Number.isSafeInteger(id)) notFound();
   const [post, tagOptions] = await Promise.all([getPostForEditing(id), getTagOptions()]);
-  if (!post) notFound();
+  // Pages have their own editor URL, /admin/pages/<id>.
+  if (post?.kind !== "post") notFound();
 
   return (
-    <PostEditor post={post} tagOptions={tagOptions} action={updatePost.bind(null, post.id)} />
+    <PostEditor
+      kind="post"
+      post={post}
+      tagOptions={tagOptions}
+      action={updatePost.bind(null, "post", post.id)}
+    />
   );
 }

@@ -5,7 +5,7 @@
 - [x] Draft preview
 - [x] SEO and RSS
 - [x] Login rate limiting
-- [ ] Site settings, static pages, navigation
+- [x] Site settings, static pages, navigation
 - [x] Tags
 - [ ] Scheduling, featured posts, reading time
 - [ ] Autosave and revisions
