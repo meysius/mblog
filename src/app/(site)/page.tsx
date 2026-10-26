@@ -1,10 +1,22 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { formatLongDate, formatMonthDay, formatShortDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
 import { getPublishedPosts } from "@/lib/posts";
-import { SITE_NAME } from "@/lib/site";
+import { alternates, openGraphDefaults, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  alternates: alternates("/"),
+  openGraph: {
+    ...openGraphDefaults,
+    type: "website",
+    url: "/",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
+};
 
 type Post = Awaited<ReturnType<typeof getPublishedPosts>>[number];
 

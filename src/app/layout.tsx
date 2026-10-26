@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
-import { SITE_NAME } from "@/lib/site";
+import { alternates, openGraphDefaults, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -15,8 +15,12 @@ const schibstedGrotesk = Schibsted_Grotesk({
 });
 
 export const metadata: Metadata = {
+  // Relative URLs in metadata, like /posts/hello, resolve against this.
+  metadataBase: new URL(SITE_URL),
   title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
-  description: "A personal blog",
+  description: SITE_DESCRIPTION,
+  alternates: alternates(),
+  openGraph: openGraphDefaults,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

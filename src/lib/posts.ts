@@ -7,7 +7,9 @@ import { requireUser } from "@/lib/auth";
 import { excerpt } from "@/lib/markdown";
 import { mediaUrl, type MediaImage } from "@/lib/media";
 
-// Public reads are cached until a write calls updateTag("posts").
+// Public reads are cached until a write calls updateTag("posts"), and for an hour
+// at most ("hours" profile). Next forgets updateTag calls when the server restarts,
+// so the hour limits how long a restarted server can show content from before a save.
 export const POSTS_TAG = "posts";
 
 const isPublished = lte(posts.publishedAt, sql`now()`);
@@ -35,7 +37,7 @@ function toMediaImage(
 
 export async function getPublishedPosts() {
   "use cache";
-  cacheLife("max");
+  cacheLife("hours");
   cacheTag(POSTS_TAG);
 
   const rows = await db
@@ -43,6 +45,7 @@ export async function getPublishedPosts() {
       slug: posts.slug,
       title: posts.title,
       publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt,
       writtenExcerpt: posts.excerpt,
       // Without a written excerpt, the start of the body is plenty to build one from.
       opening: sql<string>`left(${posts.body}, 2000)`,
@@ -61,7 +64,7 @@ export async function getPublishedPosts() {
 
 export async function getPublishedPost(slug: string) {
   "use cache";
-  cacheLife("max");
+  cacheLife("hours");
   cacheTag(POSTS_TAG);
 
   const [post] = await db
@@ -71,6 +74,7 @@ export async function getPublishedPost(slug: string) {
       body: posts.body,
       excerpt: posts.excerpt,
       publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,
     })
@@ -79,6 +83,32 @@ export async function getPublishedPost(slug: string) {
     .where(and(eq(posts.slug, slug), isPublished))
     .limit(1);
   return post ? { ...asPublished(post), featureImage: toMediaImage(post.featureImage) } : null;
+}
+
+/** The newest published posts with their full bodies, for the RSS feed. */
+export async function getFeedPosts(limit: number) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(POSTS_TAG);
+
+  const rows = await db
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      title: posts.title,
+      body: posts.body,
+      excerpt: posts.excerpt,
+      publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt,
+      featureImage: featureImageColumns,
+      featureImageAlt: posts.featureImageAlt,
+    })
+    .from(posts)
+    .leftJoin(media, eq(media.id, posts.featureImageId))
+    .where(isPublished)
+    .orderBy(desc(posts.publishedAt))
+    .limit(limit);
+  return rows.map((row) => ({ ...asPublished(row), featureImage: toMediaImage(row.featureImage) }));
 }
 
 /** How the admin groups posts: a draft has no publish date, a published post has one. */

@@ -18,6 +18,16 @@ pnpm dev
 
 `pnpm db:seed` (`scripts/seed.mts`) adds the same 100 sample posts every time: drafts and published posts from the last three years, about half with an excerpt and some with a generated feature image (local storage only). Running it again skips posts that are already there. Public pages are cached, so if the app is already running, save any post or restart it to see them there.
 
+## Site address
+
+Canonical links, share previews, the sitemap and the RSS feed need the site's full address. Development uses `http://localhost:3000`; for a production build, set it:
+
+```bash
+SITE_URL=https://example.com
+```
+
+Without it, `pnpm build` and `pnpm start` stop with an error that says so. Pages are prerendered with the address from build time, so rebuild after changing it.
+
 ## Image storage
 
 Uploads go to local disk by default: `./uploads`, or the folder in `MEDIA_DIR`. Back it up along with the database.
@@ -49,11 +59,13 @@ Edit `src/db/schema.ts`, then run `pnpm db:generate` and `pnpm db:migrate`. Migr
 
 ## How it fits together
 
-- `src/lib/posts.ts`: all queries. Public reads use `'use cache'` + `cacheTag("posts")`; admin reads are uncached.
+- `src/lib/posts.ts`: all queries. Public reads use `'use cache'` + `cacheTag("posts")` and refresh at least hourly (`cacheLife("hours")`), because Next forgets `updateTag` calls when the server restarts; admin reads are uncached.
 - `src/app/admin/actions.ts`: server actions. Writes call `updateTag("posts")` so public pages refresh immediately.
 - Auth: `src/lib/auth.ts` holds sessions (a random token in an httpOnly cookie, its SHA-256 in the `sessions` table) and `requireUser()`. Every admin read and server action calls `requireUser()`; `src/proxy.ts` only redirects visitors who have no session cookie at all. Passwords are hashed with scrypt (`src/lib/password.ts`).
 - Draft preview: `/admin/posts/<id>/preview` renders any post, drafts included, with the site's layout (`src/components/post-article.tsx` is shared with the public post page). In the editor, Preview shows the post as readers will see it, unsaved edits included; "Open preview" in the settings panel opens this page instead, saving unsaved edits first without changing whether the post is published.
-- Posts are Markdown (with GitHub extensions), rendered by `src/components/markdown.tsx`. Raw HTML is escaped. Styles for rendered posts live under `.prose` in `src/app/globals.css`.
+- Posts are Markdown (with GitHub extensions), rendered by `src/components/markdown.tsx`. Raw HTML is escaped. Styles for rendered posts live under `.prose` in `src/app/globals.css`. The RSS feed renders the same way with `markdownToHtml` in `src/lib/markdown.ts`, giving links and images full URLs.
+- Post pages (`src/app/(site)/posts/[slug]/page.tsx`) render in full before they're sent (`ensureStatic = "navigation"`), so a missing or unpublished post returns a real 404. Published posts are prerendered at build; any other URL renders on its first visit and is kept until a save changes the posts, or for an hour.
+- SEO: `src/lib/site.ts` has the site's name, description and address. The root layout sets shared metadata and the RSS link; the post page adds its description, canonical URL, share previews (the feature image) and JSON-LD. `src/app/sitemap.ts` and `src/app/robots.ts` generate `/sitemap.xml` and `/robots.txt`, and `src/app/rss/route.ts` serves the newest 20 posts in full at `/rss`.
 - Images: the editor uploads to `POST /media` (`src/app/media/route.ts`). Each image is turned upright, scaled to at most 2000px and re-encoded with sharp, which also strips EXIF data such as GPS location (`src/lib/media-upload.ts`). Files go to local disk or an S3-compatible bucket (`src/lib/media-storage/`, see [Image storage](#image-storage)) and are recorded in the `media` table. Posts always refer to an image as `/media/<filename>`, which the app serves from storage with long-lived cache headers.
 - Unused images are deleted automatically (`src/lib/media-usage.ts`). Each save records which images a post uses (body and feature image) in `post_media`. An image a save or delete stops using is deleted as soon as no other post uses it; an upload never saved into a post is deleted once it's a day old, so images in an unsaved editor survive.
 - `pnpm build` needs the database running, because the home page is prerendered from it.
