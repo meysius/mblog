@@ -1,10 +1,12 @@
 import "server-only";
 import type { Metadata } from "next";
+import { eq } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
-import { siteSettings } from "@/db/schema";
+import { media, siteSettings } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { mediaSrc, type MediaImage } from "@/lib/media";
+import { featureImageColumns, toMediaImage } from "@/lib/posts";
 import type { SiteSettings } from "@/lib/site-settings";
 
 function siteUrl() {
@@ -42,31 +44,56 @@ const DEFAULT_SETTINGS: SiteSettings = {
   title: "mblog",
   description: "A personal blog",
   navigation: [],
+  intro: { photo: null, heading: "", text: "", button: null },
 };
 
-const settingsColumns = {
-  title: siteSettings.title,
-  description: siteSettings.description,
-  navigation: siteSettings.navigation,
-};
+async function readSettings(): Promise<SiteSettings> {
+  const [row] = await db
+    .select({
+      title: siteSettings.title,
+      description: siteSettings.description,
+      navigation: siteSettings.navigation,
+      introPhoto: featureImageColumns,
+      introHeading: siteSettings.introHeading,
+      introText: siteSettings.introText,
+      introButtonLabel: siteSettings.introButtonLabel,
+      introButtonUrl: siteSettings.introButtonUrl,
+    })
+    .from(siteSettings)
+    .leftJoin(media, eq(media.id, siteSettings.introPhotoId))
+    .limit(1);
+  if (!row) return DEFAULT_SETTINGS;
+
+  const { introPhoto, introHeading, introText, introButtonLabel, introButtonUrl, ...site } = row;
+  return {
+    ...site,
+    intro: {
+      photo: toMediaImage(introPhoto),
+      heading: introHeading,
+      text: introText,
+      button:
+        introButtonLabel && introButtonUrl
+          ? { label: introButtonLabel, url: introButtonUrl }
+          : null,
+    },
+  };
+}
 
 // Cached like the posts (see src/lib/posts.ts), until a save calls updateTag("settings").
 export const SETTINGS_TAG = "settings";
 
-/** The site's title, description and header links. */
+/** The site's title, description, header links and home page intro. */
 export async function getSiteSettings(): Promise<SiteSettings> {
   "use cache";
   cacheLife("hours");
   cacheTag(SETTINGS_TAG);
-  const [settings] = await db.select(settingsColumns).from(siteSettings).limit(1);
-  return settings ?? DEFAULT_SETTINGS;
+  return readSettings();
 }
 
 /** The saved settings, uncached, for the admin's settings form. */
 export async function getSettingsForEditing(): Promise<SiteSettings> {
   await requireUser();
-  const [settings] = await db.select(settingsColumns).from(siteSettings).limit(1);
-  return settings ?? DEFAULT_SETTINGS;
+  return readSettings();
 }
 
 // Metadata merges shallowly, so a page that sets alternates or openGraph replaces

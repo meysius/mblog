@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, lt, notExists, notInArray, or, sql } from "drizzle-orm";
 import { db, type Transaction } from "@/db";
-import { media, postMedia } from "@/db/schema";
+import { media, postMedia, siteSettings } from "@/db/schema";
 import { deleteMediaFile } from "@/lib/media-storage";
 
 // Candidates only; each one is looked up in the media table.
@@ -43,9 +43,9 @@ export async function syncPostMedia(
 }
 
 /**
- * Deletes images that no post uses: `dropped` ones right away, and any other
- * unused upload once it's a day old. Until then it may be in an editor that
- * hasn't been saved yet.
+ * Deletes images that no post uses and that aren't the intro photo: `dropped`
+ * ones right away, and any other unused upload once it's a day old. Until then
+ * it may be in an editor or the settings form, not saved yet.
  */
 export async function deleteUnusedMedia(dropped: number[]) {
   const deleted = await db
@@ -53,6 +53,9 @@ export async function deleteUnusedMedia(dropped: number[]) {
     .where(
       and(
         notExists(db.select().from(postMedia).where(eq(postMedia.mediaId, media.id))),
+        notExists(
+          db.select().from(siteSettings).where(eq(siteSettings.introPhotoId, media.id)),
+        ),
         or(
           dropped.length ? inArray(media.id, dropped) : undefined,
           lt(media.createdAt, sql`now() - interval '1 day'`),

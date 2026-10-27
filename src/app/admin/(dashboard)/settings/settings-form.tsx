@@ -10,11 +10,14 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
+  FieldTitle,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { joinLines } from "@/lib/excerpt";
 import {
+  INTRO_HEADING_MAX_LENGTH,
+  INTRO_TEXT_MAX_LENGTH,
   NAV_LABEL_MAX_LENGTH,
   NAV_URL_MAX_LENGTH,
   type NavLink,
@@ -24,6 +27,7 @@ import {
   type SiteSettings,
 } from "@/lib/site-settings";
 import { type NavLinkErrors, saveSettings, type SettingsFormState } from "../../settings-actions";
+import { IntroPhotoField } from "./intro-photo-field";
 
 const initialState: SettingsFormState = {};
 
@@ -48,6 +52,11 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
     settings.navigation.map((link, id) => ({ ...link, id })),
   );
   const nextId = useRef(settings.navigation.length);
+  const { intro } = settings;
+  const [photo, setPhoto] = useState(intro.photo);
+  const [heading, setHeading] = useState(intro.heading);
+  const [text, setText] = useState(intro.text);
+  const [button, setButton] = useState<NavLink>(intro.button ?? { label: "", url: "" });
   // The row just added, so its label field takes focus.
   const [addedId, setAddedId] = useState<number>();
   const errors = state.errors ?? {};
@@ -84,7 +93,11 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
   const dirty =
     oneLine(title) !== settings.title ||
     description.trim() !== settings.description ||
-    asSaved(links) !== asSaved(settings.navigation);
+    asSaved(links) !== asSaved(settings.navigation) ||
+    photo?.id !== intro.photo?.id ||
+    oneLine(heading) !== intro.heading ||
+    text.trim() !== intro.text ||
+    asSaved([button]) !== asSaved(intro.button ? [intro.button] : []);
 
   return (
     <form action={formAction} className="flex max-w-xl flex-col gap-10">
@@ -210,6 +223,85 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
           <Plus data-icon="inline-start" />
           Add link
         </Button>
+      </FieldSet>
+
+      <FieldSet>
+        <div>
+          <FieldLegend>Intro</FieldLegend>
+          <FieldDescription>
+            At the top of the home page, above the posts. Fill in as much as you like; empty
+            fields don’t show.
+          </FieldDescription>
+        </div>
+
+        <IntroPhotoField photo={photo} onChange={setPhoto} />
+
+        <Field>
+          <FieldLabel htmlFor="intro-heading">Heading</FieldLabel>
+          <Input
+            id="intro-heading"
+            name="introHeading"
+            placeholder="Your name"
+            maxLength={INTRO_HEADING_MAX_LENGTH}
+            value={heading}
+            onChange={(e) => setHeading(e.target.value)}
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="intro-text">Text</FieldLabel>
+          <Textarea
+            id="intro-text"
+            name="introText"
+            rows={5}
+            maxLength={INTRO_TEXT_MAX_LENGTH}
+            value={text}
+            aria-describedby="intro-text-hint"
+            onChange={(e) => setText(e.target.value)}
+          />
+          <FieldDescription id="intro-text-hint" className="flex justify-between gap-4">
+            <span>
+              A few lines about you or the blog. Markdown works, so you can add links like
+              [this](https://example.com).
+            </span>
+            <span className="tabular-nums">
+              {text.length}/{INTRO_TEXT_MAX_LENGTH}
+            </span>
+          </FieldDescription>
+        </Field>
+
+        <Field>
+          <FieldTitle>Button</FieldTitle>
+          <div className="grid gap-2 sm:grid-cols-[2fr_3fr]">
+            <div className="flex flex-col gap-1.5">
+              <Input
+                name="introButtonLabel"
+                aria-label="Button label"
+                placeholder="Label"
+                maxLength={NAV_LABEL_MAX_LENGTH}
+                value={button.label}
+                aria-invalid={Boolean(errors.introButton?.label)}
+                onChange={(e) => setButton({ ...button, label: e.target.value })}
+              />
+              {errors.introButton?.label && <FieldError>{errors.introButton.label}</FieldError>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Input
+                name="introButtonUrl"
+                aria-label="Button URL"
+                placeholder="/rss"
+                maxLength={NAV_URL_MAX_LENGTH}
+                value={button.url}
+                aria-invalid={Boolean(errors.introButton?.url)}
+                onChange={(e) => setButton({ ...button, url: e.target.value })}
+              />
+              {errors.introButton?.url && <FieldError>{errors.introButton.url}</FieldError>}
+            </div>
+          </div>
+          <FieldDescription>
+            Optional. For example, Subscribe with /rss, the blog’s feed.
+          </FieldDescription>
+        </Field>
       </FieldSet>
 
       <div className="flex items-center gap-3">

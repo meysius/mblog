@@ -1,12 +1,16 @@
 "use server";
 
 import { refresh, updateTag } from "next/cache";
+import { after } from "next/server";
 import { db } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { joinLines } from "@/lib/excerpt";
+import { deleteUnusedMedia } from "@/lib/media-usage";
 import { SETTINGS_TAG } from "@/lib/site";
 import {
+  INTRO_HEADING_MAX_LENGTH,
+  INTRO_TEXT_MAX_LENGTH,
   NAV_LABEL_MAX_LENGTH,
   NAV_URL_MAX_LENGTH,
   type NavLink,
@@ -23,12 +27,13 @@ export type SettingsFormState = {
     title?: string;
     // By the link's position in the form, blank rows included.
     navigation?: (NavLinkErrors | null)[];
+    introButton?: NavLinkErrors;
   };
   // Set when the settings are saved, so the form can confirm it.
   savedAt?: number;
 };
 
-// A header link from its two fields: the link, errors to show, or neither for a row left empty.
+// A link from its two fields: the link, errors to show, or neither when both are empty.
 function readNavLink(
   rawLabel: string,
   rawUrl: string,
@@ -57,15 +62,41 @@ export async function saveSettings(
     .getAll("navLabel")
     .map((label, i) => readNavLink(String(label), urls[i] ?? ""));
   const navigation = links.flatMap(({ link }) => link ?? []);
+  // Submitted empty when there's no photo.
+  const introPhotoId = Number(formData.get("introPhotoId")) || null;
+  const introHeading = oneLine(String(formData.get("introHeading") ?? "")).slice(
+    0,
+    INTRO_HEADING_MAX_LENGTH,
+  );
+  // Browsers submit textarea line breaks as CRLF; store plain LF.
+  const introText = String(formData.get("introText") ?? "")
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .slice(0, INTRO_TEXT_MAX_LENGTH);
+  const introButton = readNavLink(
+    String(formData.get("introButtonLabel") ?? ""),
+    String(formData.get("introButtonUrl") ?? ""),
+  );
 
   const errors: SettingsFormState["errors"] = {};
   if (!title) errors.title = "Add a title.";
   if (links.some((link) => link.errors)) {
     errors.navigation = links.map((link) => link.errors ?? null);
   }
-  if (errors.title || errors.navigation) return { errors };
+  if (introButton.errors) errors.introButton = introButton.errors;
+  if (errors.title || errors.navigation || errors.introButton) return { errors };
 
-  const values = { title, description, navigation };
+  const values = {
+    title,
+    description,
+    navigation,
+    introPhotoId,
+    introHeading,
+    introText,
+    introButtonLabel: introButton.link?.label ?? "",
+    introButtonUrl: introButton.link?.url ?? "",
+  };
+  const [previous] = await db.select({ photoId: siteSettings.introPhotoId }).from(siteSettings);
   await db
     .insert(siteSettings)
     .values({ id: 1, ...values })
@@ -74,5 +105,8 @@ export async function saveSettings(
   updateTag(SETTINGS_TAG);
   // Re-render the page so the form shows the saved settings.
   refresh();
+  // A photo that was replaced or removed goes, unless a post uses it too.
+  const oldPhotoId = previous?.photoId;
+  if (oldPhotoId && oldPhotoId !== introPhotoId) after(() => deleteUnusedMedia([oldPhotoId]));
   return { savedAt: Date.now() };
 }

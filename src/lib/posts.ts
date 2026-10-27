@@ -90,6 +90,7 @@ async function getPostSummaries(tagId?: number) {
       // Without a written excerpt, the start of the body is plenty to build one from.
       opening: sql<string>`left(${posts.body}, 2000)`,
       featureImage: featureImageColumns,
+      tags: tagList,
     })
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))

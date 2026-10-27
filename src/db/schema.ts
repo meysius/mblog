@@ -73,7 +73,7 @@ export const media = pgTable("media", {
 });
 
 // Which images each post uses, in its body or as its feature image. Images that
-// no post uses get deleted (src/lib/media-usage.ts).
+// no post uses, other than the intro photo, get deleted (src/lib/media-usage.ts).
 export const postMedia = pgTable(
   "post_media",
   {
@@ -135,6 +135,14 @@ export const siteSettings = pgTable(
     description: text().notNull(),
     // The links in the site's header, in order.
     navigation: jsonb().$type<{ label: string; url: string }[]>().notNull(),
+    // The intro at the top of the home page. Empty fields are left out of it.
+    introPhotoId: integer("intro_photo_id").references(() => media.id, { onDelete: "set null" }),
+    introHeading: text("intro_heading").notNull().default(""),
+    // Markdown.
+    introText: text("intro_text").notNull().default(""),
+    // A button under the text, shown when both are set.
+    introButtonLabel: text("intro_button_label").notNull().default(""),
+    introButtonUrl: text("intro_button_url").notNull().default(""),
   },
   (t) => [check("site_settings_single_row", sql`${t.id} = 1`)],
 );

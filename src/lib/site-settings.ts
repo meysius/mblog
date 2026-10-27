@@ -1,14 +1,38 @@
 // Shared by the settings form and its save action.
 
+import type { MediaImage } from "@/lib/media";
+
 /** A link in the site's header. */
 export type NavLink = { label: string; url: string };
 
-export type SiteSettings = { title: string; description: string; navigation: NavLink[] };
+/** The top of the home page: a photo, a heading, Markdown text and a button, each optional. */
+export type Intro = {
+  photo: MediaImage | null;
+  heading: string;
+  text: string;
+  button: NavLink | null;
+};
+
+export type SiteSettings = {
+  title: string;
+  description: string;
+  navigation: NavLink[];
+  intro: Intro;
+};
 
 export const SITE_TITLE_MAX_LENGTH = 100;
 
 /** Room for a sentence or two, like an excerpt. */
 export const SITE_DESCRIPTION_MAX_LENGTH = 300;
+
+export const INTRO_HEADING_MAX_LENGTH = 100;
+
+/** A short paragraph or two. */
+export const INTRO_TEXT_MAX_LENGTH = 1000;
+
+export function hasIntro({ photo, heading, text, button }: Intro) {
+  return Boolean(photo || heading || text || button);
+}
 
 /** Links show side by side in the header, so a word or two. */
 export const NAV_LABEL_MAX_LENGTH = 50;

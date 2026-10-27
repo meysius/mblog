@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { marginGrid, PostLink, PostList } from "@/components/post-list";
-import { formatLongDate, formatMonthDay } from "@/lib/format";
+import Link from "next/link";
+import { Markdown } from "@/components/markdown";
+import { marginGrid, PostLink } from "@/components/post-list";
+import { formatLongDate, formatMonthDay, formatShortDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
 import { getPublishedPosts, type PostSummary } from "@/lib/posts";
 import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
+import { hasIntro, type Intro, isInternal } from "@/lib/site-settings";
 import { cn } from "@/lib/utils";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,47 +24,78 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-// The newest post leads, this many follow with excerpts, and the archive lists the rest.
+// The newest post is featured, this many follow in a grid, and the archive lists the rest.
 const RECENT_COUNT = 6;
 
+// The small label over each list of posts.
+const sectionLabel = "text-sm font-medium text-muted-foreground";
+
 export default async function Home() {
-  const [[lead, ...rest], site] = await Promise.all([getPublishedPosts(), getSiteSettings()]);
+  const [[featured, ...rest], site] = await Promise.all([getPublishedPosts(), getSiteSettings()]);
   const recent = rest.slice(0, RECENT_COUNT);
   const older = rest.slice(RECENT_COUNT);
 
   return (
     <>
-      <h1 className="sr-only">{site.title}</h1>
-      {lead ? (
-        <div className="flex flex-col gap-20 sm:gap-28">
-          <LeadPost post={lead} />
-          {recent.length > 0 && <PostList posts={recent} />}
-          {older.length > 0 && <Archive posts={older} />}
-        </div>
-      ) : (
-        <p className="font-serif text-xl text-muted-foreground">Nothing published yet.</p>
-      )}
+      {/* The intro's heading names the page when it has one. */}
+      {!site.intro.heading && <h1 className="sr-only">{site.title}</h1>}
+      <div className="flex flex-col gap-20 sm:gap-24">
+        {hasIntro(site.intro) && <IntroSection intro={site.intro} />}
+        {featured ? (
+          <>
+            <FeaturedPost post={featured} />
+            {recent.length > 0 && <RecentPosts posts={recent} />}
+            {older.length > 0 && <Archive posts={older} />}
+          </>
+        ) : (
+          <p className="font-serif text-xl text-muted-foreground">Nothing published yet.</p>
+        )}
+      </div>
     </>
   );
 }
 
-function LeadPost({ post }: { post: PostSummary }) {
+const introButtonClass =
+  "mt-5 inline-flex items-center rounded-xl border px-4 py-2 font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
+
+// Set in Admin → Settings. Each part shows only when it's filled in.
+function IntroSection({ intro: { photo, heading, text, button } }: { intro: Intro }) {
+  return (
+    <header className="flex flex-col items-start gap-3">
+      {photo && (
+        <Image
+          src={mediaSrc(photo.url)}
+          width={photo.width}
+          height={photo.height}
+          alt=""
+          sizes="6rem"
+          loading="eager"
+          className="mb-5 size-24 rounded-full bg-muted object-cover"
+        />
+      )}
+      {heading && (
+        <h1 className="font-serif text-[1.75rem] leading-tight font-medium tracking-tight text-balance">
+          {heading}
+        </h1>
+      )}
+      {text && <Markdown className="max-w-[38rem] text-lg leading-relaxed">{text}</Markdown>}
+      {button &&
+        (isInternal(button.url) ? (
+          <Link href={button.url} className={introButtonClass}>
+            {button.label}
+          </Link>
+        ) : (
+          <a href={button.url} className={introButtonClass}>
+            {button.label}
+          </a>
+        ))}
+    </header>
+  );
+}
+
+function FeaturedPost({ post }: { post: PostSummary }) {
   return (
     <article className="relative">
-      <time
-        dateTime={post.publishedAt.toISOString()}
-        className="text-sm text-muted-foreground"
-      >
-        {formatLongDate(post.publishedAt)}
-      </time>
-      <h2 className="mt-4 font-serif text-[clamp(2.75rem,9vw,4.75rem)] leading-[1.02] font-normal tracking-[-0.025em] text-balance">
-        <PostLink post={post} />
-      </h2>
-      {post.excerpt && (
-        <p className="mt-6 line-clamp-3 max-w-[40ch] font-serif text-xl leading-snug text-pretty text-muted-foreground sm:text-2xl">
-          {post.excerpt}
-        </p>
-      )}
       {post.featureImage && (
         <Image
           src={mediaSrc(post.featureImage.url)}
@@ -72,10 +106,77 @@ function LeadPost({ post }: { post: PostSummary }) {
           sizes="(min-width: 48rem) 45rem, calc(100vw - 3rem)"
           loading="eager"
           fetchPriority="high"
-          className="mt-10 max-h-[30rem] w-full rounded-lg bg-muted object-cover"
+          className="mb-7 aspect-[16/10] w-full rounded-2xl bg-muted object-cover"
         />
       )}
+      <time
+        dateTime={post.publishedAt.toISOString()}
+        className="text-sm text-muted-foreground"
+      >
+        {formatLongDate(post.publishedAt)}
+      </time>
+      <h2 className="mt-2 font-serif text-3xl leading-tight font-medium tracking-tight text-balance sm:text-4xl">
+        <PostLink post={post} className="after:rounded-2xl" />
+      </h2>
+      {post.excerpt && (
+        <p className="mt-3 line-clamp-3 max-w-[38rem] font-serif text-lg leading-relaxed text-pretty text-muted-foreground">
+          {post.excerpt}
+        </p>
+      )}
     </article>
+  );
+}
+
+function RecentPosts({ posts }: { posts: PostSummary[] }) {
+  return (
+    <section aria-labelledby="recent">
+      <h2 id="recent" className={sectionLabel}>
+        Recent
+      </h2>
+      <ul className="mt-6 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+        {posts.map((post) => (
+          <li key={post.slug} className="relative flex items-center gap-4">
+            <Thumbnail post={post} />
+            <div className="min-w-0">
+              <h3 className="line-clamp-2 font-serif text-lg leading-snug font-medium text-pretty">
+                <PostLink post={post} className="after:-inset-2" />
+              </h3>
+              <p className="mt-1 flex flex-wrap gap-x-3 text-[0.8125rem] font-medium text-muted-foreground">
+                {post.tags[0] && <span className="text-foreground">{post.tags[0].name}</span>}
+                <time dateTime={post.publishedAt.toISOString()}>
+                  {formatShortDate(post.publishedAt)}
+                </time>
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function Thumbnail({ post }: { post: PostSummary }) {
+  const className = "size-20 shrink-0 rounded-2xl bg-muted sm:size-24";
+  return post.featureImage ? (
+    <Image
+      src={mediaSrc(post.featureImage.url)}
+      width={post.featureImage.width}
+      height={post.featureImage.height}
+      alt=""
+      sizes="(min-width: 40rem) 6rem, 5rem"
+      className={cn(className, "object-cover")}
+    />
+  ) : (
+    // Without a feature image, the title's first letter stands in.
+    <div
+      aria-hidden
+      className={cn(
+        className,
+        "flex items-center justify-center font-serif text-3xl text-muted-foreground",
+      )}
+    >
+      {Array.from(post.title)[0]}
+    </div>
   );
 }
 
@@ -95,11 +196,11 @@ const leader = " .".repeat(80);
 
 function Archive({ posts }: { posts: PostSummary[] }) {
   return (
-    <section aria-labelledby="archive" className="border-t pt-10">
-      <h2 id="archive" className="font-serif text-3xl font-medium tracking-tight">
+    <section aria-labelledby="archive">
+      <h2 id="archive" className={sectionLabel}>
         Archive
       </h2>
-      <div className="mt-10 flex flex-col gap-14">
+      <div className="mt-8 flex flex-col gap-14">
         {groupByYear(posts).map(([year, yearPosts]) => (
           <section key={year} aria-labelledby={`year-${year}`} className={cn(marginGrid, "gap-y-5")}>
             {/* The year stays pinned in the margin while its posts scroll past. */}
