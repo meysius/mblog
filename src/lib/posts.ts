@@ -19,6 +19,7 @@ import { media, posts, postTags, tags } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { excerpt } from "@/lib/markdown";
 import { mediaUrl, type MediaImage } from "@/lib/media";
+import { pageCount, POSTS_PER_PAGE } from "@/lib/pagination";
 
 // Public reads are cached until a write calls updateTag("posts"), and for an hour
 // at most (see publishedCacheLife). Next forgets updateTag calls when the server
@@ -114,17 +115,58 @@ export async function getPublishedPosts() {
   return getPostSummaries();
 }
 
-/** The published posts with this tag, newest first, for its page on the blog. */
-export async function getPublishedPostsTagged(tagId: number) {
+/**
+ * A page of the home page's posts, with how many pages there are. The lead post
+ * comes first: the newest featured post, or the newest post when none is
+ * featured. The rest follow, newest first.
+ */
+export async function getHomePage(page: number) {
   "use cache";
   cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
-  return getPostSummaries(tagId);
+  return getPostPage(page, { leadFirst: true });
 }
 
-// Published posts as post lists show them, newest first: every one, or those with a tag.
-async function getPostSummaries(tagId?: number) {
-  const rows = await db
+/** A page of the published posts with this tag, newest first, for its page on the blog. */
+export async function getPublishedPostsTagged(tagId: number, page: number) {
+  "use cache";
+  cacheLife(await publishedCacheLife());
+  cacheTag(POSTS_TAG);
+  return getPostPage(page, { tagId });
+}
+
+type ListOptions = { tagId?: number; leadFirst?: boolean };
+
+async function getPostPage(page: number, options: ListOptions) {
+  const [summaries, total] = await Promise.all([
+    getPostSummaries({ ...options, page }),
+    countPublished(options.tagId),
+  ]);
+  return { posts: summaries, total, pageCount: pageCount(total) };
+}
+
+// How many published posts there are: every one, or those with a tag.
+async function countPublished(tagId?: number) {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(posts)
+    .where(and(isPost, isPublished, tagged(tagId)));
+  return total;
+}
+
+// The post the home page leads with (see getHomePage).
+const leadPostId = db
+  .select({ id: posts.id })
+  .from(posts)
+  .where(and(isPost, isPublished))
+  .orderBy(desc(posts.featured), desc(posts.publishedAt), desc(posts.id))
+  .limit(1);
+const isLeadPost = sql`${posts.id} = (${leadPostId})`;
+
+// Published posts as post lists show them, newest first: every one, or those with
+// a tag. With a page, only that page's posts.
+async function getPostSummaries({ tagId, leadFirst, page }: ListOptions & { page?: number } = {}) {
+  const query = db
     .select({
       slug: posts.slug,
       title: posts.title,
@@ -141,7 +183,12 @@ async function getPostSummaries(tagId?: number) {
     .from(posts)
     .leftJoin(media, eq(media.id, posts.featureImageId))
     .where(and(isPost, isPublished, tagged(tagId)))
-    .orderBy(desc(posts.publishedAt));
+    // The id breaks ties, so no post shows up on two pages or none.
+    .orderBy(...(leadFirst ? [desc(isLeadPost)] : []), desc(posts.publishedAt), desc(posts.id))
+    .$dynamic();
+  const rows = await (page
+    ? query.limit(POSTS_PER_PAGE).offset((page - 1) * POSTS_PER_PAGE)
+    : query);
   return rows.map(({ writtenExcerpt, opening, featureImage, ...row }) => ({
     ...asPublished(row),
     excerpt: writtenExcerpt || excerpt(opening, 240),

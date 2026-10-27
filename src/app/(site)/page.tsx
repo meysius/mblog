@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Markdown } from "@/components/markdown";
-import { marginGrid, PostLink } from "@/components/post-list";
-import { formatLongDate, formatMonthDay, formatShortDate } from "@/lib/format";
+import { Archive, PostLink, sectionLabel } from "@/components/post-list";
+import { formatLongDate, formatShortDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
-import { getPublishedPosts, type PostSummary } from "@/lib/posts";
+import { getHomePage, type PostSummary } from "@/lib/posts";
 import { formatReadingTime } from "@/lib/reading-time";
 import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { hasIntro, type Intro, isInternal } from "@/lib/site-settings";
@@ -25,17 +25,14 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-// One post leads, this many follow in a grid, and the archive lists the rest.
+// One post leads, this many follow in a grid, and the archive lists the rest of the
+// first page. Later pages, /page/2 and on, are archive only.
 const RECENT_COUNT = 6;
 
-// The small label over each list of posts.
-const sectionLabel = "text-sm font-medium text-muted-foreground";
-
 export default async function Home() {
-  const [posts, site] = await Promise.all([getPublishedPosts(), getSiteSettings()]);
-  // The newest featured post leads, or the newest post when none is featured.
-  const lead = posts.find((post) => post.featured) ?? posts[0];
-  const rest = posts.filter((post) => post !== lead);
+  const [{ posts, pageCount }, site] = await Promise.all([getHomePage(1), getSiteSettings()]);
+  // The lead post comes first (see getHomePage).
+  const [lead, ...rest] = posts;
   const recent = rest.slice(0, RECENT_COUNT);
   const older = rest.slice(RECENT_COUNT);
 
@@ -49,7 +46,7 @@ export default async function Home() {
           <>
             <LeadPost post={lead} />
             {recent.length > 0 && <RecentPosts posts={recent} />}
-            {older.length > 0 && <Archive posts={older} />}
+            {older.length > 0 && <Archive posts={older} page={1} pageCount={pageCount} />}
           </>
         ) : (
           <p className="font-serif text-xl text-muted-foreground">Nothing published yet.</p>
@@ -182,68 +179,5 @@ function Thumbnail({ post }: { post: PostSummary }) {
     >
       {Array.from(post.title)[0]}
     </div>
-  );
-}
-
-function groupByYear(posts: PostSummary[]) {
-  const years = new Map<number, PostSummary[]>();
-  for (const post of posts) {
-    const year = post.publishedAt.getFullYear();
-    years.set(year, [...(years.get(year) ?? []), post]);
-  }
-  return [...years];
-}
-
-// Leader dots run along each row's last line, right-aligned so every row's dots line up
-// under each other. The title and date cover them with the page background, so they
-// show only in between, even after a title that wraps.
-const leader = " .".repeat(80);
-
-function Archive({ posts }: { posts: PostSummary[] }) {
-  return (
-    <section aria-labelledby="archive">
-      <h2 id="archive" className={sectionLabel}>
-        Archive
-      </h2>
-      <div className="mt-8 flex flex-col gap-14">
-        {groupByYear(posts).map(([year, yearPosts]) => (
-          <section key={year} aria-labelledby={`year-${year}`} className={cn(marginGrid, "gap-y-5")}>
-            {/* The year stays pinned in the margin while its posts scroll past. */}
-            <h3
-              id={`year-${year}`}
-              className="font-serif text-4xl leading-none font-light text-muted-foreground tabular-nums md:sticky md:top-10 md:self-start md:text-5xl"
-            >
-              {year}
-            </h3>
-            <ul className="flex flex-col gap-3">
-              {yearPosts.map((post) => (
-                <li
-                  key={post.slug}
-                  className="relative isolate flex items-baseline-last font-serif text-lg leading-snug"
-                >
-                  <span className="min-w-0 flex-1 text-pretty">
-                    <span className="bg-background pr-2">
-                      <PostLink post={post} className="after:-inset-x-2 after:-inset-y-1" />
-                    </span>
-                  </span>
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-0 bottom-0 -z-10 overflow-clip whitespace-nowrap text-muted-foreground/50 select-none [direction:rtl]"
-                  >
-                    {leader}
-                  </span>
-                  <time
-                    dateTime={post.publishedAt.toISOString()}
-                    className="ml-6 shrink-0 bg-background pl-2 font-sans text-sm whitespace-nowrap text-muted-foreground tabular-nums"
-                  >
-                    {formatMonthDay(post.publishedAt)}
-                  </time>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </section>
   );
 }

@@ -24,14 +24,14 @@ export async function getPublishedTag(slug: string) {
   return tag ?? null;
 }
 
-/** Tags that published posts have, with when the latest of those posts changed. */
+/** Tags that published posts have, with how many and when the latest of them changed. */
 export async function getPublishedTags() {
   "use cache";
   cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const rows = await db
-    .select({ slug: tags.slug, updatedAt: max(posts.updatedAt) })
+    .select({ slug: tags.slug, postCount: count(), updatedAt: max(posts.updatedAt) })
     .from(tags)
     .innerJoin(postTags, eq(postTags.tagId, tags.id))
     .innerJoin(posts, eq(posts.id, postTags.postId))

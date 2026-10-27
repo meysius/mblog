@@ -14,7 +14,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastChange = Math.max(...posts.map((post) => post.updatedAt.getTime()));
 
   return [
-    // The home page lists every post, so it changes whenever one does.
+    // The home page shows the newest posts and counts the pages of older ones, so
+    // take it to change whenever any post does.
     { url: absoluteUrl("/"), lastModified: posts.length > 0 ? new Date(lastChange) : undefined },
     ...posts.map((post) => ({
       url: absoluteUrl(`/posts/${post.slug}`),

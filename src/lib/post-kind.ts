@@ -29,4 +29,4 @@ export function previewPath(kind: PostKind, id: number) {
  * Top-level routes the site already has, so no page can use them as its URL.
  * Keep in step with the folders in src/app.
  */
-export const RESERVED_PAGE_SLUGS = ["admin", "media", "posts", "rss", "tags"];
+export const RESERVED_PAGE_SLUGS = ["admin", "media", "page", "posts", "rss", "tags"];
