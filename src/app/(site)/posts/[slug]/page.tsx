@@ -4,6 +4,7 @@ import { PostArticle } from "@/components/post-article";
 import { excerpt } from "@/lib/markdown";
 import { mediaSrc } from "@/lib/media";
 import { getPublishedPost, getPublishedPosts } from "@/lib/posts";
+import { countWords } from "@/lib/reading-time";
 import {
   absoluteUrl,
   alternates,
@@ -90,6 +91,7 @@ function jsonLd(post: Post) {
     url: absoluteUrl(`/posts/${post.slug}`),
     datePublished: post.publishedAt.toISOString(),
     dateModified: post.updatedAt.toISOString(),
+    wordCount: countWords(post.body),
     keywords: post.tags.length > 0 ? post.tags.map((tag) => tag.name) : undefined,
     image: post.featureImage ? [absoluteUrl(mediaSrc(post.featureImage.url))] : undefined,
   };

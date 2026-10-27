@@ -41,7 +41,7 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
         <h1 className="mr-auto text-2xl font-semibold tracking-tight">Posts</h1>
         {/* On phones the filter gets a row of its own, below the title and button. */}
         <div className="order-last w-full sm:order-none sm:w-auto">
-          <Suspense fallback={<Skeleton className="h-8 w-full sm:w-64" />}>
+          <Suspense fallback={<Skeleton className="h-8 w-full sm:w-92" />}>
             {params.then(({ filter }) => (
               <StatusFilter filter={filter} />
             ))}
@@ -66,7 +66,7 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
   );
 }
 
-const statuses = [undefined, "draft", "published"] as const;
+const statuses = [undefined, "draft", "scheduled", "published"] as const;
 
 // The tag the list is filtered by, or undefined for every post. Null when the
 // URL names a tag that doesn't exist.
@@ -89,7 +89,7 @@ async function StatusFilter({ filter }: { filter: PostFilter }) {
             key={key}
             href={postsHref({ ...filter, status })}
             aria-current={filter.status === status ? "page" : undefined}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 font-medium whitespace-nowrap text-foreground/60 transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=page]:bg-background aria-[current=page]:text-foreground aria-[current=page]:shadow-sm dark:text-muted-foreground dark:aria-[current=page]:border-input dark:aria-[current=page]:bg-input/30"
+            className="flex flex-1 items-center justify-center gap-1 rounded-md border border-transparent px-1 font-medium sm:gap-1.5 sm:px-2.5 whitespace-nowrap text-foreground/60 transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=page]:bg-background aria-[current=page]:text-foreground aria-[current=page]:shadow-sm dark:text-muted-foreground dark:aria-[current=page]:border-input dark:aria-[current=page]:bg-input/30"
           >
             {FILTER_LABELS[key]}
             <span className="text-xs text-muted-foreground tabular-nums">{counts[key]}</span>
@@ -125,12 +125,17 @@ async function TagNotice({ filter }: { filter: PostFilter }) {
 const emptyMessages = {
   all: ["No posts yet", "Start with New post. Drafts stay private until you publish them."],
   draft: ["No drafts", "Posts you save without publishing wait here."],
+  scheduled: [
+    "Nothing scheduled",
+    "Give a draft a later publish date in its settings, and it waits here until then.",
+  ],
   published: ["Nothing published yet", "Publish a draft and it shows up here and on the blog."],
 };
 
 const taggedEmptyMessages = {
   all: ["No posts with this tag", "Add tags to a post in its settings."],
   draft: ["No drafts with this tag", "Drafts you give this tag wait here."],
+  scheduled: ["Nothing scheduled with this tag", "Scheduled posts with this tag wait here."],
   published: ["Nothing published with this tag", "Publish a post with this tag and it shows up here."],
 };
 

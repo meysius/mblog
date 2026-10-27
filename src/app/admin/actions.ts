@@ -17,7 +17,7 @@ import { uniqueTagNames } from "@/lib/tag-name";
 import { setPostTags } from "@/lib/tags";
 
 export type PostFormState = {
-  errors?: { title?: string; slug?: string };
+  errors?: { title?: string; slug?: string; publishedAt?: string };
   // Set when an edit is saved, so the editor can confirm it.
   savedAt?: number;
 };
@@ -37,13 +37,19 @@ function readPostForm(kind: PostKind, formData: FormData) {
       .slice(0, EXCERPT_MAX_LENGTH),
     featureImageId,
     featureImageAlt: featureImageId ? String(formData.get("featureImageAlt") ?? "").trim() : "",
+    // Only posts lead the home page.
+    featured: kind === "post" && formData.get("featured") === "on",
   };
   // One field per tag, in order. Pages have none.
   const tags = kind === "post" ? uniqueTagNames(formData.getAll("tags").map(String)) : [];
-  // Set by the Publish and Unpublish buttons. Any other save leaves the post as it was.
+  // Set by the Publish, Schedule and Unpublish buttons. Any other save leaves the post
+  // as it was.
   const intent = formData.get("intent");
   const publish = intent === "publish";
   const unpublish = intent === "unpublish";
+  // Schedule sends when the post goes live. Posts only.
+  const scheduleAt =
+    intent === "schedule" ? new Date(String(formData.get("publishedAt") ?? "")) : null;
 
   let errors: PostFormState["errors"];
   if (!values.title) errors = { title: "Add a title." };
@@ -51,8 +57,22 @@ function readPostForm(kind: PostKind, formData: FormData) {
     errors = { slug: "Use lowercase letters, numbers and single dashes." };
   } else if (kind === "page" && RESERVED_PAGE_SLUGS.includes(values.slug)) {
     errors = { slug: `The site already uses /${values.slug}. Pick a different URL.` };
+  } else if (scheduleAt && !(kind === "post" && scheduleAt.getTime() > Date.now())) {
+    // Also an invalid date, whose time is NaN.
+    errors = { publishedAt: "Pick a time that’s still to come." };
   }
-  return { values, tags, publish, unpublish, errors };
+  return { values, tags, publish, unpublish, scheduleAt, errors };
+}
+
+// What saving an existing post sets its publish date to, or undefined to leave it as
+// it was.
+function updatedPublishedAt(publish: boolean, unpublish: boolean, scheduleAt: Date | null) {
+  if (scheduleAt) return scheduleAt;
+  if (unpublish) return null;
+  // A published post keeps its date, and a draft or scheduled one goes live now:
+  // LEAST skips nulls.
+  if (publish) return sql`least(${posts.publishedAt}, now())`;
+  return undefined;
 }
 
 function slugTakenErrors(e: unknown, kind: PostKind, slug: string) {
@@ -70,15 +90,16 @@ export async function createPost(
   formData: FormData,
 ): Promise<PostFormState> {
   await requireUser();
-  const { values, tags, publish, errors } = readPostForm(kind, formData);
+  const { values, tags, publish, scheduleAt, errors } = readPostForm(kind, formData);
   if (errors) return { errors };
+  const publishedAt = scheduleAt ?? (publish ? sql`now()` : null);
 
   let id: number;
   try {
     id = await db.transaction(async (tx) => {
       const [{ id }] = await tx
         .insert(posts)
-        .values({ ...values, kind, publishedAt: publish ? sql`now()` : null })
+        .values({ ...values, kind, publishedAt })
         .returning({ id: posts.id });
       await setPostTags(tx, id, tags);
       await syncPostMedia(tx, id, values);
@@ -100,8 +121,9 @@ export async function updatePost(
   formData: FormData,
 ): Promise<PostFormState> {
   await requireUser();
-  const { values, tags, publish, unpublish, errors } = readPostForm(kind, formData);
+  const { values, tags, publish, unpublish, scheduleAt, errors } = readPostForm(kind, formData);
   if (errors) return { errors };
+  const publishedAt = updatedPublishedAt(publish, unpublish, scheduleAt);
 
   // The images this save stopped using, or undefined if there's no such post or page.
   let dropped: number[] | undefined;
@@ -109,12 +131,7 @@ export async function updatePost(
     dropped = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(posts)
-        .set({
-          ...values,
-          // Publishing an already published post keeps its original date.
-          ...(publish && { publishedAt: sql`coalesce(${posts.publishedAt}, now())` }),
-          ...(unpublish && { publishedAt: null }),
-        })
+        .set({ ...values, publishedAt })
         .where(and(eq(posts.id, id), eq(posts.kind, kind)))
         .returning({ id: posts.id });
       if (!updated) return undefined;

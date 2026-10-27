@@ -11,7 +11,8 @@ import {
   useSyncExternalStore,
   useTransition,
 } from "react";
-import { flushSync, useFormStatus } from "react-dom";
+import { flushSync } from "react-dom";
+import { LocalDateTime, useHydrated } from "@/components/local-date-time";
 import { PostArticle } from "@/components/post-article";
 import {
   AlertDialog,
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldLabel,
@@ -39,9 +41,10 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatShortDate } from "@/lib/format";
+import { formatDateTime, formatShortDate } from "@/lib/format";
 import { IMAGE_TYPES, uploadImage, type MediaImage } from "@/lib/media";
 import { listPath, type PostKind, previewPath, readerPath } from "@/lib/post-kind";
 import type { EditablePost, PostTag } from "@/lib/posts";
@@ -50,6 +53,8 @@ import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { deletePost, type PostFormState } from "../actions";
 import { FeatureImageField } from "./feature-image-field";
+import { PublishPopover } from "./publish-popover";
+import { SaveButton } from "./save-button";
 import { TagField } from "./tag-field";
 import { useBodyImages } from "./use-body-images";
 
@@ -93,7 +98,13 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
   const [tags, setTags] = useState(savedTags);
   // "write" or "preview": the post as readers will see it, unsaved changes included.
   const [mode, setMode] = useState("write");
+  const status = post?.status ?? "draft";
   const publishedAt = post?.publishedAt ?? null;
+  const [featured, setFeatured] = useState(post?.featured ?? false);
+  // Publishing a post asks whether it goes live now or later (publish-popover.tsx).
+  const [publishOpen, setPublishOpen] = useState(false);
+  const hydrated = useHydrated();
+  const formId = useId();
 
   // Until it's toggled, CSS decides whether the panel shows, so the server render
   // matches every screen size.
@@ -112,6 +123,7 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
     setSeenState(state);
     if (state.errors?.title) setMode("write");
     if (state.errors?.slug) setSettingsOpen(true);
+    if (!state.errors?.publishedAt) setPublishOpen(false);
   }
 
   // Saving waits until uploads finish, so no placeholder or missing image gets saved.
@@ -153,7 +165,8 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
       excerpt.trim() !== post.excerpt ||
       (featureImage?.id ?? null) !== (post.featureImage?.id ?? null) ||
       featureImageAlt.trim() !== post.featureImageAlt ||
-      tags.join("\n") !== savedTags.join("\n"));
+      tags.join("\n") !== savedTags.join("\n") ||
+      featured !== post.featured);
 
   // Preview shows the saved post, so with unsaved edits it saves first. Browsers
   // only open tabs right on a click, so the tab opens then and loads once the save lands.
@@ -169,7 +182,7 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
   const busy = pending || uploads > 0;
 
   return (
-    <form action={formAction} className="flex flex-1 flex-col">
+    <form id={formId} action={formAction} className="flex flex-1 flex-col">
       <Tabs value={mode} onValueChange={setMode} className="flex-1 gap-0">
         <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -182,7 +195,17 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
             </Link>
             {/* No room on phones, where the settings panel shows the status instead. */}
             <div className="flex min-w-0 items-center gap-2.5 text-sm max-sm:sr-only">
-              {publishedAt ? <Badge>Published</Badge> : <Badge variant="secondary">Draft</Badge>}
+              {status === "published" ? (
+                <Badge>Published</Badge>
+              ) : status === "scheduled" && publishedAt ? (
+                <Badge variant="outline">
+                  Scheduled
+                  {hydrated && <span aria-hidden>·</span>}
+                  <LocalDateTime date={publishedAt} short />
+                </Badge>
+              ) : (
+                <Badge variant="secondary">Draft</Badge>
+              )}
               <span aria-live="polite" className="truncate text-muted-foreground max-md:sr-only">
                 {uploads > 0
                   ? "Uploading image…"
@@ -243,7 +266,7 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
           </div>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {publishedAt ? (
+            {status !== "draft" ? (
               <SaveButton pendingLabel="Updating…" disabled={uploads > 0}>
                 Update
               </SaveButton>
@@ -254,9 +277,21 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
                     Save<span className="max-sm:hidden"> draft</span>
                   </span>
                 </SaveButton>
-                <SaveButton intent="publish" pendingLabel="Publishing…" disabled={uploads > 0}>
-                  Publish
-                </SaveButton>
+                {kind === "post" ? (
+                  <PublishPopover
+                    trigger={<Button disabled={busy}>Publish</Button>}
+                    open={publishOpen}
+                    onOpenChange={setPublishOpen}
+                    form={formId}
+                    scheduledAt={null}
+                    error={state.errors?.publishedAt}
+                    disabled={uploads > 0}
+                  />
+                ) : (
+                  <SaveButton intent="publish" pendingLabel="Publishing…" disabled={uploads > 0}>
+                    Publish
+                  </SaveButton>
+                )}
               </>
             )}
             <Button
@@ -435,9 +470,14 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
 
             <div className="flex flex-col gap-2">
               <FieldTitle>Status</FieldTitle>
-              {publishedAt ? (
+              {status === "published" && publishedAt ? (
                 <p className="text-sm text-muted-foreground">
                   Published {formatShortDate(publishedAt)}. Saving updates it on the blog.
+                </p>
+              ) : status === "scheduled" && publishedAt ? (
+                <p className="text-sm text-muted-foreground">
+                  Scheduled{hydrated && ` for ${formatDateTime(publishedAt)}`}. Only you can see
+                  it until then.
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -446,7 +486,7 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
               )}
               {post && (
                 <div className="flex flex-wrap gap-2">
-                  {publishedAt ? (
+                  {status === "published" ? (
                     <>
                       <Link
                         href={readerPath(kind, post.slug)}
@@ -466,7 +506,7 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
                       </SaveButton>
                     </>
                   ) : (
-                    // The saved draft at its own URL, in the site's layout. Not a submit
+                    // The saved post at its own URL, in the site's layout. Not a submit
                     // button, so Enter in a field saves rather than previews.
                     <Button
                       type="button"
@@ -485,6 +525,31 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
                       Open preview
                       <ArrowUpRight data-icon="inline-end" />
                     </Button>
+                  )}
+                  {status === "scheduled" && (
+                    <>
+                      <PublishPopover
+                        trigger={
+                          <Button type="button" variant="outline" disabled={busy}>
+                            Reschedule
+                          </Button>
+                        }
+                        open={publishOpen}
+                        onOpenChange={setPublishOpen}
+                        form={formId}
+                        scheduledAt={publishedAt}
+                        error={state.errors?.publishedAt}
+                        disabled={uploads > 0}
+                      />
+                      <SaveButton
+                        intent="unpublish"
+                        variant="outline"
+                        pendingLabel="Unscheduling…"
+                        disabled={uploads > 0}
+                      >
+                        Unschedule
+                      </SaveButton>
+                    </>
                   )}
                 </div>
               )}
@@ -526,6 +591,24 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
 
             {kind === "post" && <TagField value={tags} onChange={setTags} options={tagOptions} />}
 
+            {kind === "post" && (
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldLabel htmlFor="featured">Feature this post</FieldLabel>
+                  <FieldDescription>
+                    It leads the home page in place of the newest post. If several are
+                    featured, the newest of them does.
+                  </FieldDescription>
+                </FieldContent>
+                <Switch
+                  id="featured"
+                  name="featured"
+                  checked={featured}
+                  onCheckedChange={setFeatured}
+                />
+              </Field>
+            )}
+
             <FeatureImageField
               kind={kind}
               image={featureImage}
@@ -544,29 +627,6 @@ export function PostEditor({ kind, post, tagOptions = [], action }: PostEditorPr
         </div>
       </Tabs>
     </form>
-  );
-}
-
-type SaveButtonProps = React.ComponentProps<typeof Button> & {
-  /** Publish or unpublish along with the save. Without one, the post stays as it is. */
-  intent?: "publish" | "unpublish";
-  pendingLabel: string;
-};
-
-function SaveButton({ intent, pendingLabel, disabled, children, ...props }: SaveButtonProps) {
-  const { pending, data } = useFormStatus();
-  const saving = pending && (data?.get("intent") ?? undefined) === intent;
-
-  return (
-    <Button
-      type="submit"
-      name={intent && "intent"}
-      value={intent}
-      disabled={pending || disabled}
-      {...props}
-    >
-      {saving ? pendingLabel : children}
-    </Button>
   );
 }
 

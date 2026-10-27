@@ -4,7 +4,7 @@ import { cache } from "react";
 import { db, type Transaction } from "@/db";
 import { posts, postTags, tags } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { isPublished, POSTS_TAG } from "@/lib/posts";
+import { isPublished, POSTS_TAG, publishedCacheLife } from "@/lib/posts";
 import { slugify } from "@/lib/slug";
 
 // Public reads share the posts' cache tag: a tag's page changes with its posts,
@@ -27,7 +27,7 @@ export async function getPublishedTag(slug: string) {
 /** Tags that published posts have, with when the latest of those posts changed. */
 export async function getPublishedTags() {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const rows = await db

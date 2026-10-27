@@ -3,7 +3,14 @@ import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
 import { media, posts } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { featureImageColumns, isPublished, POSTS_TAG, toMediaImage } from "@/lib/posts";
+import {
+  featureImageColumns,
+  isPublished,
+  POSTS_TAG,
+  postStatus,
+  publishedCacheLife,
+  toMediaImage,
+} from "@/lib/posts";
 
 // Pages are rows in the posts table (src/lib/post-kind.ts), saved by the same
 // actions, so public reads share the posts' cache tag.
@@ -13,7 +20,7 @@ const isPage = eq(posts.kind, "page");
 /** The published page at /<slug>, or null if there's none. */
 export async function getPublishedPage(slug: string) {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const [page] = await db
@@ -35,7 +42,7 @@ export async function getPublishedPage(slug: string) {
 /** Every published page, for the sitemap and for prerendering. */
 export async function getPublishedPages() {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const rows = await db
@@ -62,6 +69,7 @@ export async function getPages() {
       id: posts.id,
       slug: posts.slug,
       title: posts.title,
+      status: postStatus,
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
       featureImage: featureImageColumns,

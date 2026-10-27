@@ -6,6 +6,7 @@ import { formatLongDate } from "@/lib/format";
 import { mediaSrc, type MediaImage } from "@/lib/media";
 import type { PostKind } from "@/lib/post-kind";
 import type { PostTag } from "@/lib/posts";
+import { countWords, formatReadingTime } from "@/lib/reading-time";
 import { cn } from "@/lib/utils";
 
 type PostArticleProps = {
@@ -35,17 +36,19 @@ export function PostArticle({ kind = "post", post }: PostArticleProps) {
   return (
     <article>
       <header className="mb-10">
-        {kind === "post" &&
-          (post.publishedAt ? (
-            <time
-              dateTime={post.publishedAt.toISOString()}
-              className="text-sm text-muted-foreground"
-            >
-              {formatLongDate(post.publishedAt)}
-            </time>
-          ) : (
-            <p className="text-sm text-muted-foreground">Not published yet</p>
-          ))}
+        {kind === "post" && (
+          <p className="text-sm text-muted-foreground">
+            {post.publishedAt ? (
+              <time dateTime={post.publishedAt.toISOString()}>
+                {formatLongDate(post.publishedAt)}
+              </time>
+            ) : (
+              "Not published yet"
+            )}
+            {" · "}
+            {formatReadingTime(countWords(post.body))}
+          </p>
+        )}
         <h1
           className={cn(
             "font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl",

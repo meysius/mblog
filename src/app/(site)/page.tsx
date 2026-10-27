@@ -6,6 +6,7 @@ import { marginGrid, PostLink } from "@/components/post-list";
 import { formatLongDate, formatMonthDay, formatShortDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
 import { getPublishedPosts, type PostSummary } from "@/lib/posts";
+import { formatReadingTime } from "@/lib/reading-time";
 import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { hasIntro, type Intro, isInternal } from "@/lib/site-settings";
 import { cn } from "@/lib/utils";
@@ -24,14 +25,17 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-// The newest post is featured, this many follow in a grid, and the archive lists the rest.
+// One post leads, this many follow in a grid, and the archive lists the rest.
 const RECENT_COUNT = 6;
 
 // The small label over each list of posts.
 const sectionLabel = "text-sm font-medium text-muted-foreground";
 
 export default async function Home() {
-  const [[featured, ...rest], site] = await Promise.all([getPublishedPosts(), getSiteSettings()]);
+  const [posts, site] = await Promise.all([getPublishedPosts(), getSiteSettings()]);
+  // The newest featured post leads, or the newest post when none is featured.
+  const lead = posts.find((post) => post.featured) ?? posts[0];
+  const rest = posts.filter((post) => post !== lead);
   const recent = rest.slice(0, RECENT_COUNT);
   const older = rest.slice(RECENT_COUNT);
 
@@ -41,9 +45,9 @@ export default async function Home() {
       {!site.intro.heading && <h1 className="sr-only">{site.title}</h1>}
       <div className="flex flex-col gap-20 sm:gap-24">
         {hasIntro(site.intro) && <IntroSection intro={site.intro} />}
-        {featured ? (
+        {lead ? (
           <>
-            <FeaturedPost post={featured} />
+            <LeadPost post={lead} />
             {recent.length > 0 && <RecentPosts posts={recent} />}
             {older.length > 0 && <Archive posts={older} />}
           </>
@@ -93,7 +97,7 @@ function IntroSection({ intro: { photo, heading, text, button } }: { intro: Intr
   );
 }
 
-function FeaturedPost({ post }: { post: PostSummary }) {
+function LeadPost({ post }: { post: PostSummary }) {
   return (
     <article className="relative">
       {post.featureImage && (
@@ -109,12 +113,12 @@ function FeaturedPost({ post }: { post: PostSummary }) {
           className="mb-7 aspect-[16/10] w-full rounded-2xl bg-muted object-cover"
         />
       )}
-      <time
-        dateTime={post.publishedAt.toISOString()}
-        className="text-sm text-muted-foreground"
-      >
-        {formatLongDate(post.publishedAt)}
-      </time>
+      <p className="text-sm text-muted-foreground">
+        {post.featured && <span className="font-medium text-foreground">Featured · </span>}
+        <time dateTime={post.publishedAt.toISOString()}>{formatLongDate(post.publishedAt)}</time>
+        {" · "}
+        {formatReadingTime(post.wordCount)}
+      </p>
       <h2 className="mt-2 font-serif text-3xl leading-tight font-medium tracking-tight text-balance sm:text-4xl">
         <PostLink post={post} className="after:rounded-2xl" />
       </h2>
@@ -146,6 +150,7 @@ function RecentPosts({ posts }: { posts: PostSummary[] }) {
                 <time dateTime={post.publishedAt.toISOString()}>
                   {formatShortDate(post.publishedAt)}
                 </time>
+                <span>{formatReadingTime(post.wordCount)}</span>
               </p>
             </div>
           </li>

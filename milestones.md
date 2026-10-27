@@ -7,5 +7,5 @@
 - [x] Login rate limiting
 - [x] Site settings, static pages, navigation
 - [x] Tags
-- [ ] Scheduling, featured posts, reading time
+- [x] Scheduling, featured posts, reading time
 - [ ] Autosave and revisions

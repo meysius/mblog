@@ -1,13 +1,14 @@
-import { ArrowUpRight, FileText } from "lucide-react";
+import { ArrowUpRight, FileText, Star } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { LocalDateTime } from "@/components/local-date-time";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatShortDate } from "@/lib/format";
 import { mediaSrc, type MediaImage } from "@/lib/media";
 import { editorPath, type PostKind, previewPath, readerPath } from "@/lib/post-kind";
-import type { PostTag } from "@/lib/posts";
+import type { PostStatus, PostTag } from "@/lib/posts";
 import { cn } from "@/lib/utils";
 
 // Rows in the admin's lists of posts and of pages.
@@ -18,19 +19,23 @@ type PostRowProps = {
     id: number;
     slug: string;
     title: string;
+    status: PostStatus;
     publishedAt: Date | null;
     updatedAt: Date;
     featureImage: MediaImage | null;
+    /** Posts only. */
+    featured?: boolean;
     /** Posts only. */
     tags?: PostTag[];
   };
 };
 
 export function PostRow({ kind, post }: PostRowProps) {
-  const { publishedAt } = post;
-  const [readerHref, readerLabel] = publishedAt
-    ? [readerPath(kind, post.slug), "View on the blog"]
-    : [previewPath(kind, post.id), "Preview draft"];
+  const { status, publishedAt } = post;
+  const [readerHref, readerLabel] =
+    status === "published"
+      ? [readerPath(kind, post.slug), "View on the blog"]
+      : [previewPath(kind, post.id), status === "draft" ? "Preview draft" : "Preview"];
   // A post's tags; a page's URL, for linking to it from the header.
   const detail =
     kind === "page" ? readerPath(kind, post.slug) : post.tags?.map((tag) => tag.name).join(", ");
@@ -47,12 +52,28 @@ export function PostRow({ kind, post }: PostRowProps) {
           {post.title}
         </Link>
         <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-          {publishedAt ? (
+          {status === "published" && publishedAt ? (
             <span className="shrink-0">Published {formatShortDate(publishedAt)}</span>
+          ) : status === "scheduled" && publishedAt ? (
+            <>
+              <Badge variant="outline">Scheduled</Badge>
+              <span className="shrink-0">
+                Goes live <LocalDateTime date={publishedAt} />
+              </span>
+            </>
           ) : (
             <>
               <Badge variant="secondary">Draft</Badge>
               <span className="shrink-0">Edited {formatShortDate(post.updatedAt)}</span>
+            </>
+          )}
+          {post.featured && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="flex shrink-0 items-center gap-1">
+                <Star className="size-3.5 fill-current" />
+                Featured
+              </span>
             </>
           )}
           {detail && (

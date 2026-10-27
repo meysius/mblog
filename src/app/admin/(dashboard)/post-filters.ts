@@ -4,12 +4,17 @@ import { SLUG_PATTERN } from "@/lib/slug";
 // The post list filters by ?status= and by tag with ?tag=<slug>, anything else
 // showing every post, and pages with ?page=, starting at 1.
 
-export const FILTER_LABELS = { all: "All", draft: "Drafts", published: "Published" };
+export const FILTER_LABELS = {
+  all: "All",
+  draft: "Drafts",
+  scheduled: "Scheduled",
+  published: "Published",
+};
 
 export const POSTS_PER_PAGE = 20;
 
 export function parseStatus(value: unknown): PostStatus | undefined {
-  return value === "draft" || value === "published" ? value : undefined;
+  return value === "draft" || value === "scheduled" || value === "published" ? value : undefined;
 }
 
 export function parseTag(value: unknown) {

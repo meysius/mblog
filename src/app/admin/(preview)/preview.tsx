@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { LocalDateTime } from "@/components/local-date-time";
 import { PostArticle, PostArticleSkeleton } from "@/components/post-article";
 import { SiteShell } from "@/components/site-shell";
 import { editorPath, type PostKind } from "@/lib/post-kind";
@@ -57,10 +58,15 @@ async function Preview({ kind, id }: { kind: PostKind; id: string }) {
       <div className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-11 w-full max-w-3xl items-center justify-between gap-4 px-6 text-sm">
           <p className="truncate text-muted-foreground">
-            {post.publishedAt ? (
+            {post.status === "published" ? (
               <>
                 <span className="font-medium text-foreground">Preview</span> · The saved
                 version, as readers see it.
+              </>
+            ) : post.status === "scheduled" && post.publishedAt ? (
+              <>
+                <span className="font-medium text-foreground">Scheduled preview</span> · Only you
+                can see this page until it goes live on <LocalDateTime date={post.publishedAt} />.
               </>
             ) : (
               <>

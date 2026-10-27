@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -26,6 +27,8 @@ export const posts = pgTable(
     excerpt: text().notNull().default(""),
     // null = draft; a past date = published; a future date = scheduled
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    // The newest featured post leads the home page, in place of the newest post. Posts only.
+    featured: boolean().notNull().default(false),
     featureImageId: integer("feature_image_id").references(() => media.id, {
       onDelete: "set null",
     }),

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, lte, min, type SQL, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { db } from "@/db";
@@ -8,11 +8,37 @@ import { excerpt } from "@/lib/markdown";
 import { mediaUrl, type MediaImage } from "@/lib/media";
 
 // Public reads are cached until a write calls updateTag("posts"), and for an hour
-// at most ("hours" profile). Next forgets updateTag calls when the server restarts,
-// so the hour limits how long a restarted server can show content from before a save.
+// at most (see publishedCacheLife). Next forgets updateTag calls when the server
+// restarts, so the hour limits how long a restarted server can show content from
+// before a save.
 export const POSTS_TAG = "posts";
 
 export const isPublished = lte(posts.publishedAt, sql`now()`);
+const isScheduled = gt(posts.publishedAt, sql`now()`);
+
+const HOUR = 60 * 60;
+const DAY = 24 * HOUR;
+
+/**
+ * The cache life for public reads of posts and pages. It's the "hours" profile,
+ * except while a post is scheduled: no save marks the cache out of date when the
+ * post goes live, so reads expire then instead.
+ */
+export async function publishedCacheLife() {
+  const [{ next }] = await db
+    .select({ next: min(posts.publishedAt) })
+    .from(posts)
+    .where(isScheduled);
+  // In seconds, and at least one in case the server's clock runs ahead of the database's.
+  const due = next && Math.max(1, Math.ceil((next.getTime() - Date.now()) / 1000));
+  if (!due || due > DAY) return { revalidate: HOUR, expire: DAY };
+
+  // Static pages (ensureStatic) can't use data that expires in under five minutes. So a
+  // post due sooner than that can be missing for the first visit after it's due,
+  // which refreshes the cache in the background for the next one.
+  const expire = Math.max(due, 5 * 60);
+  return { revalidate: Math.min(due, HOUR, expire - 1), expire };
+}
 
 // Pages are rows in the posts table too (src/lib/post-kind.ts). Lists, the feed
 // and post pages show posts only; pages have their own reads in src/lib/pages.ts.
@@ -33,6 +59,9 @@ export const featureImageColumns = {
 
 /** A tag as posts show it: a link to the tag's page. */
 export type PostTag = { name: string; slug: string };
+
+// Runs of characters other than spaces, like countWords in src/lib/reading-time.ts.
+const wordCount = sql<number>`regexp_count(${posts.body}, '\\S+')`.mapWith(Number);
 
 // A post's tags, in the order the author gave them.
 const tagList = sql<PostTag[]>`(
@@ -65,7 +94,7 @@ export function toMediaImage(
 
 export async function getPublishedPosts() {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
   return getPostSummaries();
 }
@@ -73,7 +102,7 @@ export async function getPublishedPosts() {
 /** The published posts with this tag, newest first, for its page on the blog. */
 export async function getPublishedPostsTagged(tagId: number) {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
   return getPostSummaries(tagId);
 }
@@ -89,6 +118,8 @@ async function getPostSummaries(tagId?: number) {
       writtenExcerpt: posts.excerpt,
       // Without a written excerpt, the start of the body is plenty to build one from.
       opening: sql<string>`left(${posts.body}, 2000)`,
+      wordCount,
+      featured: posts.featured,
       featureImage: featureImageColumns,
       tags: tagList,
     })
@@ -107,7 +138,7 @@ export type PostSummary = Awaited<ReturnType<typeof getPostSummaries>>[number];
 
 export async function getPublishedPost(slug: string) {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const [post] = await db
@@ -132,7 +163,7 @@ export async function getPublishedPost(slug: string) {
 /** The newest published posts with their full bodies, for the RSS feed. */
 export async function getFeedPosts(limit: number) {
   "use cache";
-  cacheLife("hours");
+  cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const rows = await db
@@ -156,13 +187,23 @@ export async function getFeedPosts(limit: number) {
   return rows.map((row) => ({ ...asPublished(row), featureImage: toMediaImage(row.featureImage) }));
 }
 
-/** How the admin groups posts: a draft has no publish date, a published post has one. */
-export type PostStatus = "draft" | "published";
+/**
+ * How the admin groups posts: a draft has no publish date, a scheduled post has
+ * one that's still to come, and a published post one that's past.
+ */
+export type PostStatus = "draft" | "scheduled" | "published";
 
 const hasStatus = {
   draft: isNull(posts.publishedAt),
-  published: isNotNull(posts.publishedAt),
+  scheduled: isScheduled,
+  published: isPublished,
 };
+
+export const postStatus = sql<PostStatus>`case
+  when ${hasStatus.draft} then 'draft'
+  when ${hasStatus.scheduled} then 'scheduled'
+  else 'published'
+end`;
 
 // Admin reads are never cached, and check the session themselves.
 
@@ -178,8 +219,10 @@ export async function getPosts(
       id: posts.id,
       slug: posts.slug,
       title: posts.title,
+      status: postStatus,
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
+      featured: posts.featured,
       featureImage: featureImageColumns,
       tags: tagList,
     })
@@ -193,14 +236,22 @@ export async function getPosts(
   return rows.map((row) => ({ ...row, featureImage: toMediaImage(row.featureImage) }));
 }
 
+const countWhere = (condition: SQL) =>
+  sql<number>`count(*) filter (where ${condition})`.mapWith(Number);
+
 // Cached per request, since the filter and the pagination both need it.
 export const getPostCounts = cache(async (tagId?: number) => {
   await requireUser();
-  const [{ all, published }] = await db
-    .select({ all: count(), published: count(posts.publishedAt) })
+  const [counts] = await db
+    .select({
+      all: count(),
+      draft: countWhere(hasStatus.draft),
+      scheduled: countWhere(hasStatus.scheduled),
+      published: countWhere(hasStatus.published),
+    })
     .from(posts)
     .where(and(isPost, tagged(tagId)));
-  return { all, draft: all - published, published };
+  return counts;
 });
 
 /** A post or a page, for its editor and preview. */
@@ -214,7 +265,9 @@ export async function getPostForEditing(id: number) {
       title: posts.title,
       body: posts.body,
       excerpt: posts.excerpt,
+      status: postStatus,
       publishedAt: posts.publishedAt,
+      featured: posts.featured,
       featureImage: featureImageColumns,
       featureImageAlt: posts.featureImageAlt,
       tags: tagList,
