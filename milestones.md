@@ -8,4 +8,4 @@
 - [x] Site settings, static pages, navigation
 - [x] Tags
 - [x] Scheduling, featured posts, reading time
-- [ ] Autosave and revisions
+- [x] Autosave and revisions

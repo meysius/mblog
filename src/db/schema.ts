@@ -75,8 +75,33 @@ export const media = pgTable("media", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Which images each post uses, in its body or as its feature image. Images that
-// no post uses, other than the intro photo, get deleted (src/lib/media-usage.ts).
+// Earlier versions of each post's content, for its history in the editor. A save
+// keeps the version it replaces (src/lib/revisions.ts).
+export const postRevisions = pgTable(
+  "post_revisions",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    postId: integer("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    title: text().notNull(),
+    excerpt: text().notNull(),
+    body: text().notNull(),
+    featureImageId: integer("feature_image_id").references(() => media.id, {
+      onDelete: "set null",
+    }),
+    featureImageAlt: text("feature_image_alt").notNull(),
+    // When this version was saved.
+    savedAt: timestamp("saved_at", { withTimezone: true }).notNull(),
+    // When a later save replaced it and kept it here.
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index().on(t.postId, t.createdAt)],
+);
+
+// Which images each post uses, in its body or as its feature image, or in an
+// earlier version in its history. Images that no post uses, other than the intro
+// photo, get deleted (src/lib/media-usage.ts).
 export const postMedia = pgTable(
   "post_media",
   {

@@ -5,13 +5,14 @@ import { refresh, updateTag } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { posts } from "@/db/schema";
+import { postRevisions, posts } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { uniqueViolation } from "@/lib/db-errors";
 import { EXCERPT_MAX_LENGTH, joinLines } from "@/lib/excerpt";
 import { deleteUnusedMedia, syncPostMedia } from "@/lib/media-usage";
-import { editorPath, listPath, type PostKind, readerPath, RESERVED_PAGE_SLUGS } from "@/lib/post-kind";
+import { listPath, type PostKind, readerPath, RESERVED_PAGE_SLUGS } from "@/lib/post-kind";
 import { POSTS_TAG } from "@/lib/posts";
+import { getRevision, keepRevision } from "@/lib/revisions";
 import { SLUG_PATTERN } from "@/lib/slug";
 import { uniqueTagNames } from "@/lib/tag-name";
 import { setPostTags } from "@/lib/tags";
@@ -20,6 +21,8 @@ export type PostFormState = {
   errors?: { title?: string; slug?: string; publishedAt?: string };
   // Set when an edit is saved, so the editor can confirm it.
   savedAt?: number;
+  // Set when a new post or page is saved, for the editor to move to its URL.
+  createdId?: number;
 };
 
 // Posts and pages share these actions (src/lib/post-kind.ts).
@@ -50,6 +53,8 @@ function readPostForm(kind: PostKind, formData: FormData) {
   // Schedule sends when the post goes live. Posts only.
   const scheduleAt =
     intent === "schedule" ? new Date(String(formData.get("publishedAt") ?? "")) : null;
+  // Sent by the editor when it saves a draft on its own, as it's written.
+  const autosave = formData.get("autosave") === "1";
 
   let errors: PostFormState["errors"];
   if (!values.title) errors = { title: "Add a title." };
@@ -61,7 +66,7 @@ function readPostForm(kind: PostKind, formData: FormData) {
     // Also an invalid date, whose time is NaN.
     errors = { publishedAt: "Pick a time that’s still to come." };
   }
-  return { values, tags, publish, unpublish, scheduleAt, errors };
+  return { values, tags, publish, unpublish, scheduleAt, autosave, errors };
 }
 
 // What saving an existing post sets its publish date to, or undefined to leave it as
@@ -109,9 +114,10 @@ export async function createPost(
     return { errors: slugTakenErrors(e, kind, values.slug) };
   }
 
-  updateTag(POSTS_TAG);
+  // Readers only see it once it's published, or scheduled and due.
+  if (publishedAt) updateTag(POSTS_TAG);
   after(() => deleteUnusedMedia([]));
-  redirect(editorPath(kind, id));
+  return { createdId: id, savedAt: Date.now() };
 }
 
 export async function updatePost(
@@ -121,29 +127,38 @@ export async function updatePost(
   formData: FormData,
 ): Promise<PostFormState> {
   await requireUser();
-  const { values, tags, publish, unpublish, scheduleAt, errors } = readPostForm(kind, formData);
+  const { values, tags, publish, unpublish, scheduleAt, autosave, errors } = readPostForm(
+    kind,
+    formData,
+  );
   if (errors) return { errors };
   const publishedAt = updatedPublishedAt(publish, unpublish, scheduleAt);
 
-  // The images this save stopped using, or undefined if there's no such post or page.
-  let dropped: number[] | undefined;
+  // Undefined if there's no such post or page.
+  let saved: { dropped: number[]; seenByReaders: boolean } | undefined;
   try {
-    dropped = await db.transaction(async (tx) => {
+    saved = await db.transaction(async (tx) => {
+      if (!(await keepRevision(tx, kind, id, values, { autosave }))) return undefined;
       const [updated] = await tx
         .update(posts)
         .set({ ...values, publishedAt })
         .where(and(eq(posts.id, id), eq(posts.kind, kind)))
-        .returning({ id: posts.id });
-      if (!updated) return undefined;
+        .returning({ publishedAt: posts.publishedAt });
       await setPostTags(tx, id, tags);
-      return syncPostMedia(tx, id, values);
+      return {
+        // The images this save stopped using.
+        dropped: await syncPostMedia(tx, id, values),
+        // Anything but a draft that stays one, such as each autosave of a draft.
+        seenByReaders: updated.publishedAt !== null || unpublish,
+      };
     });
   } catch (e) {
     return { errors: slugTakenErrors(e, kind, values.slug) };
   }
-  if (!dropped) notFound();
+  if (!saved) notFound();
+  const { dropped, seenByReaders } = saved;
 
-  updateTag(POSTS_TAG);
+  if (seenByReaders) updateTag(POSTS_TAG);
   after(() => deleteUnusedMedia(dropped));
   // Re-render the editor page so it shows the saved post.
   refresh();
@@ -154,7 +169,8 @@ export async function updatePost(
 export async function deletePost(id: number) {
   await requireUser();
   const { dropped, kind } = await db.transaction(async (tx) => {
-    // A deleted post uses no images.
+    // A deleted post uses no images, and its history goes with it.
+    await tx.delete(postRevisions).where(eq(postRevisions.postId, id));
     const dropped = await syncPostMedia(tx, id, { body: "", featureImageId: null });
     const [deleted] = await tx
       .delete(posts)
@@ -165,4 +181,9 @@ export async function deletePost(id: number) {
   updateTag(POSTS_TAG);
   after(() => deleteUnusedMedia(dropped));
   redirect(listPath(kind));
+}
+
+/** An earlier version of a post or page, for the editor's history to show and restore. */
+export async function loadRevision(id: number) {
+  return getRevision(id);
 }

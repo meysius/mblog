@@ -1,4 +1,17 @@
-import { and, count, desc, eq, gt, inArray, isNull, lte, min, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  type Column,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  min,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { db } from "@/db";
@@ -61,7 +74,9 @@ export const featureImageColumns = {
 export type PostTag = { name: string; slug: string };
 
 // Runs of characters other than spaces, like countWords in src/lib/reading-time.ts.
-const wordCount = sql<number>`regexp_count(${posts.body}, '\\S+')`.mapWith(Number);
+export const countWordsIn = (body: Column) =>
+  sql<number>`regexp_count(${body}, '\\S+')`.mapWith(Number);
+const wordCount = countWordsIn(posts.body);
 
 // A post's tags, in the order the author gave them.
 const tagList = sql<PostTag[]>`(
