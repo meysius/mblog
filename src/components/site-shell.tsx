@@ -11,9 +11,9 @@ export async function SiteShell({ children }: { children: React.ReactNode }) {
   const { title, navigation } = await getSiteSettings();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6">
+    <div className="site-shell mx-auto flex w-full max-w-3xl flex-1 flex-col px-6">
       {/* The links sit beside the title, or wrap below it on narrow screens. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-10 gap-y-2 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-x-10 gap-y-2 border-b py-5 sm:py-6">
         <Link href="/" className="font-serif text-xl font-semibold tracking-tight">
           {title}
         </Link>
@@ -35,7 +35,7 @@ const footerLink = "rounded-sm transition-colors outline-none hover:text-foregro
 
 function SiteFooter({ title, links }: { title: string; links: NavLink[] }) {
   return (
-    <footer className="flex flex-col gap-3 pt-8 pb-12 text-sm text-muted-foreground">
+    <footer className="flex flex-col gap-3 border-t pt-8 pb-12 text-sm text-muted-foreground">
       {links.length > 0 && (
         <nav aria-label="Footer">
           <ul className="flex flex-wrap gap-x-5 gap-y-1">

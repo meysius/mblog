@@ -33,6 +33,8 @@ export async function Sidebar() {
       <div className="mt-auto hidden flex-col gap-1 md:flex">
         <Link
           href="/"
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
         >
           <ArrowUpRight className="size-4" />

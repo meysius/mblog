@@ -107,6 +107,18 @@
   }
 }
 
+/* Widen only the active landing page. Next's Activity boundary retains visited
+   pages with display:none, so hidden home pages must not widen reading routes. */
+.site-shell:has(> main > [data-home]:not([style*="display: none"])) {
+  max-width: 72rem;
+}
+
+@media (min-width: 40rem) {
+  .site-shell:has(> main > [data-home]:not([style*="display: none"])) {
+    padding-inline: 2rem;
+  }
+}
+
 /* Post titles in lists: hovering or focusing one runs a highlighter across it,
    line by line. Apply it to an inline element so each line gets its own stroke. */
 @layer components {

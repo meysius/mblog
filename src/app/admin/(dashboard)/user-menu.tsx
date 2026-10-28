@@ -48,7 +48,7 @@ export function UserMenu({ user, compact }: UserMenuProps) {
       >
         <DropdownMenuGroup>
           <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
-          <DropdownMenuItem render={<Link href="/" />}>
+          <DropdownMenuItem render={<Link href="/" target="_blank" rel="noopener noreferrer" />}>
             <ArrowUpRight />
             View site
           </DropdownMenuItem>
