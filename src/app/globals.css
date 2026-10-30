@@ -107,8 +107,8 @@
   }
 }
 
-/* Widen only the active landing page. Next's Activity boundary retains visited
-   pages with display:none, so hidden home pages must not widen reading routes. */
+/* Widen only the active landing page and its later pages. Next's Activity boundary
+   retains visited pages with display:none, so hidden ones must not widen reading routes. */
 .site-shell:has(> main > [data-home]:not([style*="display: none"])) {
   max-width: 72rem;
 }

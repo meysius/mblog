@@ -1,17 +1,18 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { formatMonthDay, formatShortDate } from "@/lib/format";
+import { InfinitePosts, type ListPages } from "@/components/infinite-posts";
+import { formatShortDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
-import { pagePath } from "@/lib/pagination";
 import type { PostSummary } from "@/lib/posts";
+import { formatReadingTime } from "@/lib/reading-time";
 import { cn } from "@/lib/utils";
 
-// Dates and years sit in this left margin; titles and excerpts in the column beside it.
-export const marginGrid = "grid gap-x-10 md:grid-cols-[8rem_1fr]";
+// Dates sit in this left margin; titles and excerpts in the column beside it.
+const marginGrid = "grid gap-x-10 md:grid-cols-[8rem_1fr]";
 
-// The small label over each list of posts on the home page.
-export const sectionLabel = "text-sm font-medium text-muted-foreground";
+// The small label over each part of the home page.
+export const eyebrow = "text-[0.6875rem] font-medium tracking-[0.16em] uppercase";
 
 // The title link stretches over its whole post, so the date, excerpt and image open it too.
 export function PostLink({ post, className }: { post: PostSummary; className?: string }) {
@@ -28,18 +29,18 @@ export function PostLink({ post, className }: { post: PostSummary; className?: s
   );
 }
 
-/** Posts with their dates, excerpts and feature images. Shared by the home and tag pages. */
-export function PostList({ posts }: { posts: PostSummary[] }) {
+/** Posts with their dates, excerpts and feature images, as tag pages list them. */
+export function PostList({ posts, ...pages }: { posts: PostSummary[] } & ListPages) {
   return (
-    <ul className="flex flex-col gap-12">
+    <InfinitePosts className="flex flex-col gap-12" {...pages}>
       {posts.map((post) => (
         <PostListItem key={post.slug} post={post} />
       ))}
-    </ul>
+    </InfinitePosts>
   );
 }
 
-function PostListItem({ post }: { post: PostSummary }) {
+export function PostListItem({ post }: { post: PostSummary }) {
   return (
     <li className={cn(marginGrid, "relative gap-y-2 md:items-baseline")}>
       <time
@@ -74,125 +75,79 @@ function PostListItem({ post }: { post: PostSummary }) {
   );
 }
 
-function groupByYear(posts: PostSummary[]) {
-  const years = new Map<number, PostSummary[]>();
-  for (const post of posts) {
-    const year = post.publishedAt.getFullYear();
-    years.set(year, [...(years.get(year) ?? []), post]);
-  }
-  return [...years];
-}
-
-// Leader dots run along each row's last line, right-aligned so every row's dots line up
-// under each other. The title and date cover them with the page background, so they
-// show only in between, even after a title that wraps.
-const leader = " .".repeat(80);
-
-/**
- * Titles and dates by year, and links to the other pages. The home page's first
- * page ends with it, and its later pages are nothing else.
- */
-export function Archive({
+/** Posts as cards with thumbnails, under a label. The home page and its later pages show these. */
+export function PostGrid({
+  label,
+  note,
   posts,
-  page,
-  pageCount,
-}: {
-  posts: PostSummary[];
-  page: number;
-  pageCount: number;
-}) {
+  ...pages
+}: { label: string; note: string; posts: PostSummary[] } & ListPages) {
   return (
-    <section aria-labelledby="archive">
-      <h2 id="archive" className={sectionLabel}>
-        Archive
-      </h2>
-      <div className="mt-8 flex flex-col gap-14">
-        {groupByYear(posts).map(([year, yearPosts]) => (
-          <section key={year} aria-labelledby={`year-${year}`} className={cn(marginGrid, "gap-y-5")}>
-            {/* The year stays pinned in the margin while its posts scroll past. */}
-            <h3
-              id={`year-${year}`}
-              className="font-serif text-4xl leading-none font-light text-muted-foreground tabular-nums md:sticky md:top-10 md:self-start md:text-5xl"
-            >
-              {year}
-            </h3>
-            <ul className="flex flex-col gap-3">
-              {yearPosts.map((post) => (
-                <li
-                  key={post.slug}
-                  className="relative isolate flex items-baseline-last font-serif text-lg leading-snug"
-                >
-                  <span className="min-w-0 flex-1 text-pretty">
-                    <span className="bg-background pr-2">
-                      <PostLink post={post} className="after:-inset-x-2 after:-inset-y-1" />
-                    </span>
-                  </span>
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-0 bottom-0 -z-10 overflow-clip whitespace-nowrap text-muted-foreground/50 select-none [direction:rtl]"
-                  >
-                    {leader}
-                  </span>
-                  <time
-                    dateTime={post.publishedAt.toISOString()}
-                    className="ml-6 shrink-0 bg-background pl-2 font-sans text-sm whitespace-nowrap text-muted-foreground tabular-nums"
-                  >
-                    {formatMonthDay(post.publishedAt)}
-                  </time>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+    <section aria-labelledby="posts">
+      <div className="mb-7 flex items-baseline justify-between gap-4 border-b pb-4">
+        <h2 id="posts" className={eyebrow}>
+          {label}
+        </h2>
+        <span className="font-serif text-sm italic text-muted-foreground">{note}</span>
       </div>
-      {pageCount > 1 && <PageLinks path="/" page={page} pageCount={pageCount} className="mt-16" />}
+      <InfinitePosts
+        className="grid gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12"
+        {...pages}
+      >
+        {posts.map((post) => (
+          <PostCard key={post.slug} post={post} />
+        ))}
+      </InfinitePosts>
     </section>
   );
 }
 
-const pageLink =
-  "inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors outline-none hover:border-foreground/25 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
-
-/** Links to the newer and older pages of the list at this path, and which page this is. */
-export function PageLinks({
-  path,
-  page,
-  pageCount,
-  className,
-}: {
-  path: string;
-  page: number;
-  pageCount: number;
-  className?: string;
-}) {
+export function PostCard({ post }: { post: PostSummary }) {
   return (
-    <nav
-      aria-label="Pages"
-      className={cn("grid grid-cols-[1fr_auto_1fr] items-center gap-3", className)}
-    >
-      {page > 1 && (
-        <Link href={pagePath(path, page - 1)} rel="prev" className={cn(pageLink, "justify-self-start")}>
-          <ArrowLeft aria-hidden className="size-4" />
-          <span>
-            Newer<span className="max-sm:sr-only"> posts</span>
-          </span>
-        </Link>
-      )}
-      <p className="col-start-2 text-sm text-muted-foreground tabular-nums">
-        Page {page} of {pageCount}
+    <li className="group relative isolate min-w-0">
+      <Thumbnail post={post} />
+      <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        {post.tags[0] && (
+          <>
+            <span className="font-medium text-link">{post.tags[0].name}</span>
+            <span aria-hidden>·</span>
+          </>
+        )}
+        <time dateTime={post.publishedAt.toISOString()}>{formatShortDate(post.publishedAt)}</time>
       </p>
-      {page < pageCount && (
-        <Link
-          href={pagePath(path, page + 1)}
-          rel="next"
-          className={cn(pageLink, "col-start-3 justify-self-end")}
-        >
-          <span>
-            Older<span className="max-sm:sr-only"> posts</span>
-          </span>
-          <ArrowRight aria-hidden className="size-4" />
-        </Link>
+      <h3 className="mt-2 font-serif text-2xl leading-tight font-medium tracking-tight text-pretty">
+        <PostLink post={post} />
+      </h3>
+      {post.excerpt && (
+        <p className="mt-3 line-clamp-2 font-serif text-base leading-relaxed text-muted-foreground">
+          {post.excerpt}
+        </p>
       )}
-    </nav>
+      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span>{formatReadingTime(post.wordCount)}</span>
+        <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-1 group-hover:text-foreground motion-reduce:transition-none" />
+      </div>
+    </li>
+  );
+}
+
+function Thumbnail({ post }: { post: PostSummary }) {
+  return (
+    <div className="aspect-[16/10] overflow-hidden rounded-md bg-muted">
+      {post.featureImage ? (
+        <Image
+          src={mediaSrc(post.featureImage.url)}
+          width={post.featureImage.width}
+          height={post.featureImage.height}
+          alt=""
+          sizes="(min-width: 72rem) 22rem, (min-width: 64rem) 30vw, (min-width: 40rem) 46vw, calc(100vw - 3rem)"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035] motion-reduce:transition-none"
+        />
+      ) : (
+        <div aria-hidden className="flex h-full items-center justify-center bg-linear-to-br from-muted to-background font-serif text-7xl italic text-foreground/20">
+          {Array.from(post.title)[0]}
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,16 +1,17 @@
-import { ArrowDown, ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Markdown } from "@/components/markdown";
-import { Archive, PageLinks, PostLink } from "@/components/post-list";
-import { formatLongDate, formatShortDate } from "@/lib/format";
+import { eyebrow, PostGrid, PostLink } from "@/components/post-list";
+import { formatLongDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
 import { getHomePage, type PostSummary } from "@/lib/posts";
 import { formatReadingTime } from "@/lib/reading-time";
 import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { hasIntro, type Intro, isInternal } from "@/lib/site-settings";
 import { cn } from "@/lib/utils";
+import { loadHomePage } from "./actions";
 
 export async function generateMetadata(): Promise<Metadata> {
   const site = await getSiteSettings();
@@ -26,18 +27,14 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-// One post leads, six follow in the recent grid, and the archive lists the rest.
-// Later pages, /page/2 and on, remain archive only.
-const RECENT_COUNT = 6;
-const eyebrow = "text-[0.6875rem] font-medium tracking-[0.16em] uppercase";
 const textLink =
   "inline-flex items-center gap-2 rounded-sm text-sm font-medium transition-colors outline-none hover:text-link focus-visible:ring-3 focus-visible:ring-ring/50";
 
+// One post leads and the rest of the page follow in a grid, which carries on into
+// the later pages, /page/2 and on, as the reader scrolls.
 export default async function Home() {
   const [{ posts, pageCount }, site] = await Promise.all([getHomePage(1), getSiteSettings()]);
   const [lead, ...rest] = posts;
-  const recent = rest.slice(0, RECENT_COUNT);
-  const older = rest.slice(RECENT_COUNT);
 
   return (
     <div data-home className="min-w-0">
@@ -46,25 +43,21 @@ export default async function Home() {
       {lead ? (
         <div className="flex flex-col gap-14 sm:gap-20">
           <section aria-labelledby="journal">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-t pt-5">
-              <h2 id="journal" className={eyebrow}>
-                The journal
-              </h2>
-              {older.length > 0 && (
-                <a href="#archive" className={cn(textLink, "text-muted-foreground")}>
-                  Browse archive <ArrowDown aria-hidden className="size-3.5" />
-                </a>
-              )}
-            </div>
+            <h2 id="journal" className={cn(eyebrow, "mb-6 border-t pt-5")}>
+              The journal
+            </h2>
             <LeadPost post={lead} />
           </section>
-          {recent.length > 0 && <RecentPosts posts={recent} />}
-          {older.length > 0 ? (
-            <div className="border-t pt-8 sm:pt-10">
-              <Archive posts={older} page={1} pageCount={pageCount} />
-            </div>
-          ) : (
-            pageCount > 1 && <PageLinks path="/" page={1} pageCount={pageCount} />
+          {rest.length > 0 && (
+            <PostGrid
+              label="Recent entries"
+              note="Notes, ideas & observations"
+              posts={rest}
+              path="/"
+              page={1}
+              pageCount={pageCount}
+              loadPageAction={loadHomePage}
+            />
           )}
         </div>
       ) : (
@@ -184,66 +177,3 @@ function LeadPost({ post }: { post: PostSummary }) {
   );
 }
 
-function RecentPosts({ posts }: { posts: PostSummary[] }) {
-  return (
-    <section aria-labelledby="recent">
-      <div className="mb-7 flex items-baseline justify-between gap-4 border-b pb-4">
-        <h2 id="recent" className={eyebrow}>
-          Recent entries
-        </h2>
-        <span className="font-serif text-sm italic text-muted-foreground">Notes, ideas & observations</span>
-      </div>
-      <ul className="grid gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12">
-        {posts.map((post) => (
-          <li key={post.slug} className="group relative isolate min-w-0">
-            <Thumbnail post={post} />
-            <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              {post.tags[0] && (
-                <>
-                  <span className="font-medium text-link">{post.tags[0].name}</span>
-                  <span aria-hidden>·</span>
-                </>
-              )}
-              <time dateTime={post.publishedAt.toISOString()}>
-                {formatShortDate(post.publishedAt)}
-              </time>
-            </p>
-            <h3 className="mt-2 font-serif text-2xl leading-tight font-medium tracking-tight text-pretty">
-              <PostLink post={post} />
-            </h3>
-            {post.excerpt && (
-              <p className="mt-3 line-clamp-2 font-serif text-base leading-relaxed text-muted-foreground">
-                {post.excerpt}
-              </p>
-            )}
-            <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{formatReadingTime(post.wordCount)}</span>
-              <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-1 group-hover:text-foreground motion-reduce:transition-none" />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Thumbnail({ post }: { post: PostSummary }) {
-  return (
-    <div className="aspect-[16/10] overflow-hidden rounded-md bg-muted">
-      {post.featureImage ? (
-        <Image
-          src={mediaSrc(post.featureImage.url)}
-          width={post.featureImage.width}
-          height={post.featureImage.height}
-          alt=""
-          sizes="(min-width: 72rem) 22rem, (min-width: 64rem) 30vw, (min-width: 40rem) 46vw, calc(100vw - 3rem)"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035] motion-reduce:transition-none"
-        />
-      ) : (
-        <div aria-hidden className="flex h-full items-center justify-center bg-linear-to-br from-muted to-background font-serif text-7xl italic text-foreground/20">
-          {Array.from(post.title)[0]}
-        </div>
-      )}
-    </div>
-  );
-}

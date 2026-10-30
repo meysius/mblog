@@ -1,5 +1,4 @@
-const monthDay = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const short = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
+const short =new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
 const long = new Intl.DateTimeFormat("en-US", { dateStyle: "long" });
 const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
 const monthDayTime = new Intl.DateTimeFormat("en-US", {
@@ -9,8 +8,6 @@ const monthDayTime = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
-/** "Oct 23" */
-export const formatMonthDay = (date: Date) => monthDay.format(date);
 /** "Oct 23, 2026" */
 export const formatShortDate = (date: Date) => short.format(date);
 /** "October 23, 2026" */

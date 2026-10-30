@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { PageLinks, PostList } from "@/components/post-list";
+import { PostList } from "@/components/post-list";
 import { formatPostCount } from "@/lib/format";
 import { pagePath } from "@/lib/pagination";
 import { getPublishedPostsTagged } from "@/lib/posts";
 import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { getPublishedTag } from "@/lib/tags";
+import { loadTagPage } from "../../actions";
 
 // Shared by a tag's first page, /tags/<slug>, and its later ones, /tags/<slug>/page/2…
 
@@ -57,15 +58,13 @@ export function TagPosts({ tag }: { tag: Tag }) {
           </p>
         )}
       </header>
-      <PostList posts={tag.posts} />
-      {tag.pageCount > 1 && (
-        <PageLinks
-          path={`/tags/${tag.slug}`}
-          page={tag.page}
-          pageCount={tag.pageCount}
-          className="mt-16"
-        />
-      )}
+      <PostList
+        posts={tag.posts}
+        path={`/tags/${tag.slug}`}
+        page={tag.page}
+        pageCount={tag.pageCount}
+        loadPageAction={loadTagPage.bind(null, tag.id)}
+      />
     </>
   );
 }
