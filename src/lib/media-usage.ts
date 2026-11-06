@@ -53,7 +53,7 @@ export async function syncPostMedia(tx: Transaction, postId: number, post: Versi
 }
 
 /**
- * Deletes images that no post uses and that aren't the intro photo: `dropped`
+ * Deletes images that no post uses and that aren't the intro photo or favicon: `dropped`
  * ones right away, and any other unused upload once it's a day old. Until then
  * it may be in an editor or the settings form, not saved yet.
  */
@@ -64,7 +64,12 @@ export async function deleteUnusedMedia(dropped: number[]) {
       and(
         notExists(db.select().from(postMedia).where(eq(postMedia.mediaId, media.id))),
         notExists(
-          db.select().from(siteSettings).where(eq(siteSettings.introPhotoId, media.id)),
+          db
+            .select()
+            .from(siteSettings)
+            .where(
+              or(eq(siteSettings.introPhotoId, media.id), eq(siteSettings.faviconId, media.id)),
+            ),
         ),
         or(
           dropped.length ? inArray(media.id, dropped) : undefined,

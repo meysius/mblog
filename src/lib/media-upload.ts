@@ -4,7 +4,7 @@ import path from "node:path";
 import sharp, { type Metadata } from "sharp";
 import { db } from "@/db";
 import { media } from "@/db/schema";
-import { mediaUrl, type MediaImage } from "@/lib/media";
+import { FAVICON_SIZE, type MediaImage, type MediaKind, mediaUrl } from "@/lib/media";
 import { deleteMediaFile, writeMediaFile } from "@/lib/media-storage";
 import { slugify } from "@/lib/slug";
 
@@ -37,25 +37,43 @@ function filenameFor(originalName: string, format: Format) {
 /**
  * Stores an uploaded image: rotated upright, scaled down to MAX_DIMENSION and
  * re-encoded. Re-encoding drops EXIF and other metadata, such as where a photo was taken.
+ *
+ * A favicon is instead cropped to the square in its middle, scaled down to
+ * FAVICON_SIZE and made a PNG, which every browser shows. An animated one keeps
+ * its first frame.
  */
-export async function saveImage(file: File): Promise<MediaImage | { error: string }> {
-  const image = sharp(Buffer.from(await file.arrayBuffer()), { animated: true, autoOrient: true });
+export async function saveImage(
+  file: File,
+  kind: MediaKind = "image",
+): Promise<MediaImage | { error: string }> {
+  const favicon = kind === "favicon";
+  const image = sharp(Buffer.from(await file.arrayBuffer()), {
+    animated: !favicon,
+    autoOrient: true,
+  });
   const metadata = await image.metadata().catch(() => null);
   const format = metadata && formatOf(metadata);
   if (!format) {
     return { error: "That file isn’t a supported image. Use JPEG, PNG, WebP, GIF or AVIF." };
   }
+  // Turning an image upright swaps its sides, which doesn't change the shorter one.
+  const side = Math.min(FAVICON_SIZE, metadata.width, metadata.height);
+  const outputFormat = favicon ? "png" : format;
 
   let output;
   try {
     output = await image
-      .resize({
-        width: MAX_DIMENSION,
-        height: MAX_DIMENSION,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .toFormat(format, FORMATS[format].options)
+      .resize(
+        favicon
+          ? { width: side, height: side, fit: "cover" }
+          : {
+              width: MAX_DIMENSION,
+              height: MAX_DIMENSION,
+              fit: "inside",
+              withoutEnlargement: true,
+            },
+      )
+      .toFormat(outputFormat, FORMATS[outputFormat].options)
       .toBuffer({ resolveWithObject: true });
   } catch {
     return { error: "That image couldn’t be read. The file may be damaged." };
@@ -64,7 +82,7 @@ export async function saveImage(file: File): Promise<MediaImage | { error: strin
   const { data, info } = output;
   // An animated image's height covers all its frames stacked; one frame is pageHeight.
   const size = { width: info.width, height: info.pageHeight ?? info.height };
-  const filename = filenameFor(file.name, format);
+  const filename = filenameFor(file.name, outputFormat);
   await writeMediaFile(filename, data);
   try {
     const [{ id }] = await db

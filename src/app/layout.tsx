@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, Schibsted_Grotesk } from "next/font/google";
-import { alternates, getSiteSettings, openGraphDefaults, SITE_URL } from "@/lib/site";
+import { alternates, getSiteSettings, icons, openGraphDefaults, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -21,6 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(SITE_URL),
     title: { default: site.title, template: `%s | ${site.title}` },
     description: site.description,
+    icons: icons(site.favicon),
     alternates: alternates(site),
     openGraph: openGraphDefaults(site),
   };

@@ -16,6 +16,8 @@ export type Intro = {
 export type SiteSettings = {
   title: string;
   description: string;
+  // A square PNG, or null for the default favicon.
+  favicon: MediaImage | null;
   navigation: NavLink[];
   intro: Intro;
 };

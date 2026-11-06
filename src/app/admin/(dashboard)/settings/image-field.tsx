@@ -2,18 +2,34 @@
 
 import { ImagePlus, LoaderCircle } from "lucide-react";
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FieldError, FieldTitle } from "@/components/ui/field";
-import { IMAGE_TYPES, mediaSrc, type MediaImage, uploadImage } from "@/lib/media";
+import { FieldDescription, FieldError, FieldTitle } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
+import { IMAGE_TYPES, mediaSrc, type MediaImage, type MediaKind, uploadImage } from "@/lib/media";
 
-type IntroPhotoFieldProps = {
-  photo: MediaImage | null;
-  onChange: (photo: MediaImage | null) => void;
+type ImageFieldProps = {
+  label: string;
+  // The hidden input that submits the image's id, or nothing when there's none.
+  name: string;
+  image: MediaImage | null;
+  onChange: (image: MediaImage | null) => void;
+  kind?: MediaKind;
+  // The preview's shape, as the site shows the image.
+  previewClassName?: string;
+  description?: ReactNode;
 };
 
-/** The intro's photo. It uploads when chosen; saving the form makes it the intro's. */
-export function IntroPhotoField({ photo, onChange }: IntroPhotoFieldProps) {
+/** An image in the settings, such as the intro photo. It uploads when chosen; saving the form keeps it. */
+export function ImageField({
+  label,
+  name,
+  image,
+  onChange,
+  kind,
+  previewClassName,
+  description,
+}: ImageFieldProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +43,7 @@ export function IntroPhotoField({ photo, onChange }: IntroPhotoFieldProps) {
     setError(null);
     setUploading(true);
     try {
-      onChange(await uploadImage(file));
+      onChange(await uploadImage(file, kind));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -37,8 +53,8 @@ export function IntroPhotoField({ photo, onChange }: IntroPhotoFieldProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <FieldTitle>Photo</FieldTitle>
-      <input type="hidden" name="introPhotoId" value={photo?.id ?? ""} />
+      <FieldTitle>{label}</FieldTitle>
+      <input type="hidden" name={name} value={image?.id ?? ""} />
       <input
         ref={fileInput}
         type="file"
@@ -50,12 +66,17 @@ export function IntroPhotoField({ photo, onChange }: IntroPhotoFieldProps) {
         }}
       />
       <div className="flex items-center gap-4">
-        <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted text-muted-foreground">
-          {photo ? (
+        <div
+          className={cn(
+            "relative flex size-16 shrink-0 items-center justify-center overflow-hidden border bg-muted text-muted-foreground",
+            previewClassName,
+          )}
+        >
+          {image ? (
             <Image
-              src={mediaSrc(photo.url)}
-              width={photo.width}
-              height={photo.height}
+              src={mediaSrc(image.url)}
+              width={image.width}
+              height={image.height}
               alt=""
               sizes="4rem"
               className="size-full object-cover"
@@ -77,9 +98,9 @@ export function IntroPhotoField({ photo, onChange }: IntroPhotoFieldProps) {
             disabled={uploading}
             onClick={() => fileInput.current?.click()}
           >
-            {photo ? "Replace" : "Upload photo"}
+            {image ? "Replace" : `Upload ${label.toLowerCase()}`}
           </Button>
-          {photo && (
+          {image && (
             <Button
               type="button"
               variant="ghost"
@@ -93,7 +114,11 @@ export function IntroPhotoField({ photo, onChange }: IntroPhotoFieldProps) {
           )}
         </div>
       </div>
-      {error && <FieldError>{error}</FieldError>}
+      {error ? (
+        <FieldError>{error}</FieldError>
+      ) : (
+        description && <FieldDescription>{description}</FieldDescription>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Metadata } from "next";
 import { eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
 import { media, siteSettings } from "@/db/schema";
@@ -43,15 +44,25 @@ export const RSS_PATH = "/rss";
 const DEFAULT_SETTINGS: SiteSettings = {
   title: "mblog",
   description: "A personal blog",
+  favicon: null,
   navigation: [],
   intro: { photo: null, heading: "", text: "", button: null },
 };
+
+// The favicon's row in media, next to the intro photo's.
+const faviconMedia = alias(media, "favicon");
 
 async function readSettings(): Promise<SiteSettings> {
   const [row] = await db
     .select({
       title: siteSettings.title,
       description: siteSettings.description,
+      favicon: {
+        id: faviconMedia.id,
+        filename: faviconMedia.filename,
+        width: faviconMedia.width,
+        height: faviconMedia.height,
+      },
       navigation: siteSettings.navigation,
       introPhoto: featureImageColumns,
       introHeading: siteSettings.introHeading,
@@ -61,12 +72,15 @@ async function readSettings(): Promise<SiteSettings> {
     })
     .from(siteSettings)
     .leftJoin(media, eq(media.id, siteSettings.introPhotoId))
+    .leftJoin(faviconMedia, eq(faviconMedia.id, siteSettings.faviconId))
     .limit(1);
   if (!row) return DEFAULT_SETTINGS;
 
-  const { introPhoto, introHeading, introText, introButtonLabel, introButtonUrl, ...site } = row;
+  const { favicon, introPhoto, introHeading, introText, introButtonLabel, introButtonUrl, ...site } =
+    row;
   return {
     ...site,
+    favicon: toMediaImage(favicon),
     intro: {
       photo: toMediaImage(introPhoto),
       heading: introHeading,
@@ -82,7 +96,7 @@ async function readSettings(): Promise<SiteSettings> {
 // Cached like the posts (see src/lib/posts.ts), until a save calls updateTag("settings").
 export const SETTINGS_TAG = "settings";
 
-/** The site's title, description, header links and home page intro. */
+/** The site's title, description, favicon, header links and home page intro. */
 export async function getSiteSettings(): Promise<SiteSettings> {
   "use cache";
   cacheLife("hours");
@@ -109,6 +123,18 @@ export function alternates(site: SiteSettings, canonical?: string): Metadata["al
 
 export function openGraphDefaults(site: SiteSettings) {
   return { siteName: site.title, locale: "en_US" } satisfies Metadata["openGraph"];
+}
+
+/**
+ * The favicon's links: the uploaded one, for browser tabs and phone home screens,
+ * or else public/favicon.ico. The site sets them here rather than with an app/
+ * favicon.ico, whose link Next.js would add alongside an uploaded one.
+ */
+export function icons(favicon: MediaImage | null): Metadata["icons"] {
+  if (!favicon) return { icon: "/favicon.ico" };
+  const url = mediaSrc(favicon.url);
+  const sizes = `${favicon.width}x${favicon.height}`;
+  return { icon: { url, type: "image/png", sizes }, apple: { url, sizes } };
 }
 
 /** A feature image as share previews show it. */

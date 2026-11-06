@@ -56,6 +56,8 @@ export async function saveSettings(
   const description = joinLines(String(formData.get("description") ?? ""))
     .trim()
     .slice(0, SITE_DESCRIPTION_MAX_LENGTH);
+  // Submitted empty for the default favicon, like introPhotoId below.
+  const faviconId = Number(formData.get("faviconId")) || null;
   // One label field and one URL field per link, in order.
   const urls = formData.getAll("navUrl").map(String);
   const links = formData
@@ -89,6 +91,7 @@ export async function saveSettings(
   const values = {
     title,
     description,
+    faviconId,
     navigation,
     introPhotoId,
     introHeading,
@@ -96,7 +99,9 @@ export async function saveSettings(
     introButtonLabel: introButton.link?.label ?? "",
     introButtonUrl: introButton.link?.url ?? "",
   };
-  const [previous] = await db.select({ photoId: siteSettings.introPhotoId }).from(siteSettings);
+  const [previous] = await db
+    .select({ photoId: siteSettings.introPhotoId, faviconId: siteSettings.faviconId })
+    .from(siteSettings);
   await db
     .insert(siteSettings)
     .values({ id: 1, ...values })
@@ -105,8 +110,11 @@ export async function saveSettings(
   updateTag(SETTINGS_TAG);
   // Re-render the page so the form shows the saved settings.
   refresh();
-  // A photo that was replaced or removed goes, unless a post uses it too.
-  const oldPhotoId = previous?.photoId;
-  if (oldPhotoId && oldPhotoId !== introPhotoId) after(() => deleteUnusedMedia([oldPhotoId]));
+  // A photo or favicon that was replaced or removed goes, unless a post uses it too.
+  const replaced = [
+    previous?.photoId !== introPhotoId && previous?.photoId,
+    previous?.faviconId !== faviconId && previous?.faviconId,
+  ].filter((id) => typeof id === "number");
+  if (replaced.length) after(() => deleteUnusedMedia(replaced));
   return { savedAt: Date.now() };
 }

@@ -113,7 +113,7 @@ export const postRevisions = pgTable(
 
 // Which images each post uses, in its body or as its feature image, or in an
 // earlier version in its history. Images that no post uses, other than the intro
-// photo, get deleted (src/lib/media-usage.ts).
+// photo and the favicon, get deleted (src/lib/media-usage.ts).
 export const postMedia = pgTable(
   "post_media",
   {
@@ -186,6 +186,9 @@ export const siteSettings = pgTable(
     // A button under the text, shown when both are set.
     introButtonLabel: text("intro_button_label").notNull().default(""),
     introButtonUrl: text("intro_button_url").notNull().default(""),
+    // The icon in browser tabs: a square PNG made on upload (src/lib/media-upload.ts).
+    // Without one, the site uses public/favicon.ico.
+    faviconId: integer("favicon_id").references(() => media.id, { onDelete: "set null" }),
   },
   (t) => [check("site_settings_single_row", sql`${t.id} = 1`)],
 );

@@ -7,6 +7,12 @@ export const TOO_LARGE_MESSAGE = "That image is over 20 MB. Try a smaller one.";
 
 export type MediaImage = { id: number; url: string; width: number; height: number };
 
+/** What an upload is for. A favicon is cropped square and made smaller (src/lib/media-upload.ts). */
+export type MediaKind = "image" | "favicon";
+
+/** A favicon's width and height at most: room for phone home screens, which show the largest. */
+export const FAVICON_SIZE = 256;
+
 // Every upload gets a new filename, so a file never changes once it's served.
 export const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
@@ -29,11 +35,12 @@ export function mediaSrc(url: string) {
 }
 
 /** Uploads an image from the browser. Errors carry a message to show the user. */
-export async function uploadImage(file: File): Promise<MediaImage> {
+export async function uploadImage(file: File, kind: MediaKind = "image"): Promise<MediaImage> {
   if (file.size > MAX_IMAGE_BYTES) throw new Error(TOO_LARGE_MESSAGE);
 
   const body = new FormData();
   body.set("file", file);
+  body.set("kind", kind);
   let response: Response;
   try {
     response = await fetch("/media", { method: "POST", body });

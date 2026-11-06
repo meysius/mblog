@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { joinLines } from "@/lib/excerpt";
+import { FAVICON_SIZE } from "@/lib/media";
 import {
   INTRO_HEADING_MAX_LENGTH,
   INTRO_TEXT_MAX_LENGTH,
@@ -27,7 +28,7 @@ import {
   type SiteSettings,
 } from "@/lib/site-settings";
 import { type NavLinkErrors, saveSettings, type SettingsFormState } from "../../settings-actions";
-import { IntroPhotoField } from "./intro-photo-field";
+import { ImageField } from "./image-field";
 
 const initialState: SettingsFormState = {};
 
@@ -48,6 +49,7 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
   const [state, formAction, pending] = useActionState(saveSettings, initialState);
   const [title, setTitle] = useState(settings.title);
   const [description, setDescription] = useState(settings.description);
+  const [favicon, setFavicon] = useState(settings.favicon);
   const [links, setLinks] = useState<LinkRow[]>(() =>
     settings.navigation.map((link, id) => ({ ...link, id })),
   );
@@ -93,6 +95,7 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
   const dirty =
     oneLine(title) !== settings.title ||
     description.trim() !== settings.description ||
+    favicon?.id !== settings.favicon?.id ||
     asSaved(links) !== asSaved(settings.navigation) ||
     photo?.id !== intro.photo?.id ||
     oneLine(heading) !== intro.heading ||
@@ -140,6 +143,16 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
             </span>
           </FieldDescription>
         </Field>
+
+        <ImageField
+          label="Favicon"
+          name="faviconId"
+          kind="favicon"
+          image={favicon}
+          onChange={setFavicon}
+          previewClassName="rounded-lg"
+          description={`In browser tabs and bookmarks. Use a square image at least ${FAVICON_SIZE} pixels wide; other shapes are cropped to their middle.`}
+        />
       </div>
 
       <FieldSet>
@@ -234,7 +247,13 @@ export function SettingsForm({ settings }: { settings: SiteSettings }) {
           </FieldDescription>
         </div>
 
-        <IntroPhotoField photo={photo} onChange={setPhoto} />
+        <ImageField
+          label="Photo"
+          name="introPhotoId"
+          image={photo}
+          onChange={setPhoto}
+          previewClassName="rounded-full"
+        />
 
         <Field>
           <FieldLabel htmlFor="intro-heading">Heading</FieldLabel>

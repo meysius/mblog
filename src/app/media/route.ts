@@ -17,7 +17,10 @@ function isSameOrigin(request: Request) {
   return origin !== null && URL.canParse(origin) && new URL(origin).host === host;
 }
 
-/** Uploads an image. Responds with its MediaImage, or { error } to show the user. */
+/**
+ * Uploads an image, or a favicon when the form's kind is "favicon". Responds with its
+ * MediaImage, or { error } to show the user.
+ */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return error(403, "Uploads have to come from this site.");
   if (!(await getCurrentUser())) {
@@ -27,11 +30,12 @@ export async function POST(request: Request) {
     return error(413, TOO_LARGE_MESSAGE);
   }
 
-  const file = (await request.formData().catch(() => null))?.get("file");
+  const formData = await request.formData().catch(() => null);
+  const file = formData?.get("file");
   if (!(file instanceof File)) return error(400, "Choose an image to upload.");
   if (file.size > MAX_IMAGE_BYTES) return error(413, TOO_LARGE_MESSAGE);
 
-  const result = await saveImage(file);
+  const result = await saveImage(file, formData?.get("kind") === "favicon" ? "favicon" : "image");
   if ("error" in result) return error(415, result.error);
   return Response.json(result, { status: 201 });
 }
