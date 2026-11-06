@@ -71,6 +71,7 @@ systemctl restart mblog   # resets the cache, so pages show the restored posts
 | nginx site | `/etc/nginx/sites-available/feghhi.com.conf`, a copy of `feghhi.com.conf` here. www.feghhi.com and plain HTTP redirect to https://feghhi.com, and Ghost's old post address redirects to its new one. |
 | TLS certificate | `/etc/letsencrypt/feghhi.com/`, for feghhi.com and www.feghhi.com, issued and renewed by the acme.sh in `/etc/letsencrypt` (its daily cron, which also renews portifo's) from the webroot `/var/www/blog/nginx-root` |
 | DNS | Route 53, zone `feghhi.com`: A records for `feghhi.com` and `www`, both pointing at the droplet |
+| Email | Password reset links go out through Mailgun's SMTP (`SMTP_*` and `MAIL_FROM` in `.env`), from `support@mail.feghhi.com`. The Mailgun domain `mail.feghhi.com` (US region) has its SPF, DKIM, MX, DMARC and tracking records in Route 53. It was set up for Ghost, and its API key, unused by mblog, is in Ghost's final backup. |
 
 ## Installing or updating the server side
 
@@ -110,6 +111,11 @@ Done once, on 2026-11-06 (first at blog.feghhi.com, then moved to feghhi.com the
    S3_REGION=ca-central-1
    S3_ACCESS_KEY_ID=…       # the mblog-media IAM user's access key
    S3_SECRET_ACCESS_KEY=…
+   SMTP_HOST=smtp.mailgun.org
+   SMTP_PORT=2525           # DigitalOcean blocks 25, 465 and 587
+   SMTP_USER=support@mail.feghhi.com
+   SMTP_PASSWORD=…          # that Mailgun SMTP login's password
+   MAIL_FROM="Meysam Feghhi <support@mail.feghhi.com>"
    ```
    The bucket blocks all public access. `mblog-media`'s inline policy `mblog-media-bucket` allows `s3:GetObject`, `s3:PutObject` and `s3:DeleteObject` on `arn:aws:s3:::feghhi-mblog-media/*`, and `s3:ListBucket` on the bucket itself.
 5. The certificate. nginx needs a port 80 block for both names first, serving `/.well-known/acme-challenge` from `/var/www/blog/nginx-root`, since the full site doesn't load without the certificate:

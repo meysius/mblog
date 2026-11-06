@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
 
-const PUBLIC_ADMIN_PATHS = ["/admin/login", "/admin/setup"];
+const PUBLIC_ADMIN_PATHS = [
+  "/admin/login",
+  "/admin/setup",
+  "/admin/forgot-password",
+  "/admin/reset-password",
+];
 
 // A quick redirect for visitors with no session cookie at all. It doesn't check
 // that the session is valid; requireUser() does that next to the data.

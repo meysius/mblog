@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -26,7 +27,15 @@ export function LoginForm() {
         />
       </Field>
       <Field data-invalid={Boolean(state.error)}>
-        <FieldLabel htmlFor="password">Password</FieldLabel>
+        <div className="flex items-baseline justify-between gap-4">
+          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <Link
+            href="/admin/forgot-password"
+            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <Input
           id="password"
           name="password"

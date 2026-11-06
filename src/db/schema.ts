@@ -65,6 +65,18 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Links that let the owner choose a new password (src/lib/password-reset.ts). Like
+// sessions, only the SHA-256 of the link's token is stored. A link works once,
+// until it expires.
+export const passwordResets = pgTable("password_resets", {
+  id: text().primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Uploaded images. The files themselves are in media storage (src/lib/media-storage/).
 export const media = pgTable("media", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -144,10 +156,13 @@ export const postTags = pgTable(
   (t) => [primaryKey({ columns: [t.postId, t.tagId] }), index().on(t.tagId)],
 );
 
-// Recent failed sign-ins per visitor address and per email (src/lib/login-limits.ts).
+// Recent failed sign-ins, and requests for password reset links, per visitor address
+// and per email (src/lib/login-limits.ts).
 export const loginLimits = pgTable("login_limits", {
-  // "address:<ip>" or "email:<email>"
+  // "address:<ip>" or "email:<email>" for sign-ins; "reset-address:…" or
+  // "reset-email:…" for reset requests.
   key: text().primaryKey(),
+  // Failed sign-ins, or reset requests, so far in the window.
   failures: integer().notNull(),
   // When the count starts over.
   resetsAt: timestamp("resets_at", { withTimezone: true }).notNull(),

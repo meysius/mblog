@@ -78,6 +78,13 @@
       "when": 1793133576493,
       "tag": "0010_revisions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793987669822,
+      "tag": "0011_password-resets",
+      "breakpoints": true
     }
   ]
 }
