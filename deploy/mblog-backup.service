@@ -1,0 +1,14 @@
+[Unit]
+Description=Back up mblog's database to S3
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mblog-backup
+# The mblog-backup IAM user's key (root, 0600). The bucket is in us-east-2.
+Environment=AWS_SHARED_CREDENTIALS_FILE=/etc/mblog-backup/aws-credentials
+Environment=AWS_DEFAULT_REGION=us-east-2
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

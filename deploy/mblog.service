@@ -10,6 +10,8 @@ WorkingDirectory=/opt/mblog/current
 # PORT and HOSTNAME (127.0.0.1) are in here too: nginx is the only way in.
 EnvironmentFile=/opt/mblog/shared/.env
 ExecStart=/usr/bin/node server.js
+# Node exits with 143 when systemd stops it with SIGTERM; that's a clean stop.
+SuccessExitStatus=143
 # Releases are prerendered from an empty database: see mblog-reset-cache.
 ExecStartPost=/usr/local/sbin/mblog-reset-cache
 Restart=on-failure
@@ -18,7 +20,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-# The release's .next holds the server's page cache; uploads are in shared/.
+# The release's .next holds the server's page cache.
 ReadWritePaths=/opt/mblog
 
 [Install]

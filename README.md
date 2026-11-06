@@ -32,7 +32,7 @@ Without it, `pnpm build` and `pnpm start` stop with an error that says so. Pages
 
 ## Production
 
-Each push to `main` deploys to https://blog.feghhi.com: GitHub Actions builds a release and the server pulls it. See [deploy/README.md](deploy/README.md). Builds use `output: "standalone"`, so run a production build locally with `node .next/standalone/server.js` (after copying `.next/static` into `.next/standalone/.next/`) rather than `pnpm start`.
+Each push to `main` deploys to https://feghhi.com: GitHub Actions builds a release and the server pulls it. See [deploy/README.md](deploy/README.md). Builds use `output: "standalone"`, so run a production build locally with `node .next/standalone/server.js` (after copying `.next/static` into `.next/standalone/.next/`) rather than `pnpm start`.
 
 ## Image storage
 

@@ -1,0 +1,49 @@
+#!/bin/bash
+# Backs up mblog's database to S3: a pg_dump in Postgres's custom format, checked
+# before it's uploaded and after. Older dumps are pruned only once a new one is
+# safely there, so a run that fails never costs a good backup. Uploaded images
+# are already in their own bucket (feghhi-mblog-media).
+#
+# Installed as /usr/local/sbin/mblog-backup (root:root, 0755) by hand and run
+# daily by mblog-backup.timer. The AWS key in AWS_SHARED_CREDENTIALS_FILE belongs
+# to the mblog-backup IAM user, which can only use the mblog/ folder of the bucket.
+set -euo pipefail
+
+BUCKET=feghhi-blog-backups
+PREFIX=mblog/db
+DEST=s3://$BUCKET/$PREFIX
+KEEP_DAYS=30 # delete dumps older than this…
+KEEP_MIN=7   # …but always keep the newest few
+
+name="mblog_$(date -u +%Y-%m-%d_%H-%M).dump"
+dump=$(mktemp)
+trap 'rm -f "$dump"' EXIT
+
+# The mblog OS user signs in to its database over the local socket (peer
+# authentication), so no password is needed here.
+setpriv --reuid=mblog --regid=mblog --init-groups --reset-env -- \
+  pg_dump --format=custom --no-owner --dbname=mblog >"$dump"
+if ! pg_restore --list "$dump" | grep -q "TABLE DATA public posts "; then
+  echo "The dump has no posts table. Not uploading it." >&2
+  exit 1
+fi
+size=$(stat -c %s "$dump")
+
+aws s3 cp --only-show-errors "$dump" "$DEST/$name"
+remote_size=$(aws s3api head-object --bucket "$BUCKET" --key "$PREFIX/$name" --query ContentLength --output text)
+if [[ $remote_size != "$size" ]]; then
+  echo "Uploaded $name is $remote_size bytes, not $size" >&2
+  exit 1
+fi
+echo "Backed up to $DEST/$name ($size bytes)"
+
+# Names sort by date. Keep the newest KEEP_MIN whatever their age.
+mapfile -t dumps < <(aws s3 ls "$DEST/" | awk '{print $4}' | grep -E '^mblog_[0-9-]{10}_[0-9-]{5}\.dump$' | sort)
+cutoff=$(date -u -d "$KEEP_DAYS days ago" +%Y-%m-%d)
+for ((i = 0; i < ${#dumps[@]} - KEEP_MIN; i++)); do
+  old=${dumps[i]}
+  if [[ ${old:6:10} < $cutoff ]]; then
+    aws s3 rm --only-show-errors "$DEST/$old"
+    echo "Deleted $old"
+  fi
+done

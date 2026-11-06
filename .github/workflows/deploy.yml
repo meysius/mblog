@@ -43,7 +43,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/mblog
       # The site's public address. Pages are prerendered with it, so it's baked
       # into the release: keep it the same as SITE_URL in the server's .env.
-      SITE_URL: https://blog.feghhi.com
+      SITE_URL: https://feghhi.com
 
     steps:
       - uses: actions/checkout@v4
