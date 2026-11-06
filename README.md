@@ -30,6 +30,10 @@ SITE_URL=https://example.com
 
 Without it, `pnpm build` and `pnpm start` stop with an error that says so. Pages are prerendered with the address from build time, so rebuild after changing it.
 
+## Production
+
+Each push to `main` deploys to https://blog.feghhi.com: GitHub Actions builds a release and the server pulls it. See [deploy/README.md](deploy/README.md). Builds use `output: "standalone"`, so run a production build locally with `node .next/standalone/server.js` (after copying `.next/static` into `.next/standalone/.next/`) rather than `pnpm start`.
+
 ## Image storage
 
 Uploads go to local disk by default: `./uploads`, or the folder in `MEDIA_DIR`. Back it up along with the database.

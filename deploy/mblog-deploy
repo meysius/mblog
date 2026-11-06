@@ -1,0 +1,115 @@
+#!/bin/bash
+# Deploys the latest mblog release from GitHub, if it isn't live already.
+#
+# Installed as /usr/local/sbin/mblog-deploy (root:root, 0755) and run only by
+# mblog-deploy.service: every 5 minutes, and right after GitHub's release
+# webhook reaches the app (see README.md). Install it by hand. Never install it
+# from a release: everything a release contains runs as the mblog user, so a
+# push to main can't change what runs as root.
+set -euo pipefail
+
+REPO=meysius/mblog
+APP_DIR=/opt/mblog
+HEALTH_URL=http://127.0.0.1:3001/
+KEEP=5
+FAILED_FILE=/var/lib/mblog-deploy/failed-commit   # StateDirectory, root only
+REQUEST_FILE=$APP_DIR/shared/deploy-requested     # written by the app
+
+# setpriv rather than runuser: same privilege drop, no PAM session lines in
+# the deploy log.
+as_app() { setpriv --reuid=mblog --regid=mblog --init-groups --reset-env -- "$@"; }
+
+switch_to() {
+  as_app ln -sfn "$1" "$APP_DIR/current.next"
+  as_app mv -T "$APP_DIR/current.next" "$APP_DIR/current"
+}
+
+# mblog.service only finishes starting once the server answers and has reset
+# its caches (mblog-reset-cache), so a failed restart is a failed start. Then
+# the home page has to render from the database, and the service still has to
+# be up a few seconds later.
+start_app() {
+  systemctl restart mblog || return 1
+  curl -fs -o /dev/null --max-time 30 "$HEALTH_URL" || return 1
+  sleep 5
+  systemctl is-active --quiet mblog
+}
+
+# Which release is latest? GitHub decides, not whoever woke us up.
+read_latest() {
+  local manifest
+  manifest=$(curl -fsSL --max-time 30 "https://github.com/$REPO/releases/latest/download/release.txt")
+  commit=$(sed -n 's/^commit=//p' <<<"$manifest")
+  sha256=$(sed -n 's/^sha256=//p' <<<"$manifest")
+  if [[ ! $commit =~ ^[0-9a-f]{40}$ || ! $sha256 =~ ^[0-9a-f]{64}$ ]]; then
+    echo "release.txt is malformed" >&2
+    exit 1
+  fi
+}
+
+# GitHub sends the "published" webhook a few seconds before Latest points at
+# the new release. When the app has just passed on the commit from a signed
+# "published" webhook, keep checking for up to 2 minutes while Latest is
+# still the live commit. The hint only decides how long to wait. What gets
+# deployed is still whatever Latest says.
+previous=$(readlink -f "$APP_DIR/current" || true)
+awaited=""
+if [[ -n $(find "$REQUEST_FILE" -mmin -2 2>/dev/null) ]]; then
+  awaited=$(head -c 41 "$REQUEST_FILE" | grep -xE '[0-9a-f]{40}' || true)
+fi
+read_latest
+for _ in $(seq 24); do
+  [[ -z $awaited || $awaited == "${previous##*/}" || $commit != "${previous##*/}" ]] && break
+  sleep 5
+  read_latest
+done
+
+release="$APP_DIR/releases/$commit"
+if [[ $previous == "$release" ]]; then
+  echo "Up to date at ${commit:0:7}"
+  exit 0
+fi
+if [[ -f $FAILED_FILE && $(<"$FAILED_FILE") == "$commit" ]]; then
+  echo "Not retrying ${commit:0:7}: it failed to start last time. Push a fix." >&2
+  exit 1
+fi
+
+echo "Deploying ${commit:0:7} (live: ${previous##*/})"
+tarball="$APP_DIR/incoming.tar.gz"
+as_app curl -fsSL --max-time 600 -o "$tarball" \
+  "https://github.com/$REPO/releases/download/deploy-$commit/mblog.tar.gz"
+if ! sha256sum --quiet -c - <<<"$sha256  $tarball"; then
+  as_app rm -f "$tarball"
+  echo "mblog.tar.gz doesn't match release.txt" >&2
+  exit 1
+fi
+
+as_app rm -rf "$release"
+as_app mkdir -p "$release"
+as_app tar -xzf "$tarball" -C "$release"
+as_app rm -f "$tarball"
+
+# Migrations only go forward. A rollback below runs the previous code against
+# the new schema, so they have to stay compatible with the release before.
+as_app /usr/bin/node --env-file="$APP_DIR/shared/.env" "$release/migrate.cjs" "$release/drizzle"
+
+switch_to "$release"
+if ! start_app; then
+  echo "${commit:0:7} didn't come up. Rolling back to ${previous##*/}" >&2
+  echo "$commit" >"$FAILED_FILE"
+  if [[ -d $previous ]]; then
+    switch_to "$previous"
+    systemctl restart mblog || true
+  fi
+  exit 1
+fi
+rm -f "$FAILED_FILE"
+echo "Live at ${commit:0:7}"
+
+# Keep the newest $KEEP releases (by date), never the two just used.
+for name in $(ls -1t "$APP_DIR/releases" | tail -n +$((KEEP + 1))); do
+  dir="$APP_DIR/releases/$name"
+  if [[ $name =~ ^[0-9a-f]{40}$ && $dir != "$release" && $dir != "$previous" ]]; then
+    as_app rm -rf -- "$dir"
+  fi
+done

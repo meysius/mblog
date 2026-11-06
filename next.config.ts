@@ -4,7 +4,9 @@ import type { NextConfig } from "next";
 const publicMediaUrl = process.env.NEXT_PUBLIC_MEDIA_URL?.replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Releases ship .next/standalone: the server and only the packages it uses
+  // (.github/workflows/deploy.yml).
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   images: {

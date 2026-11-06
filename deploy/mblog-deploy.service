@@ -1,0 +1,15 @@
+[Unit]
+Description=Deploy the latest mblog release from GitHub
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mblog-deploy
+TimeoutStartSec=15min
+StateDirectory=mblog-deploy
+StateDirectoryMode=0700
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/mblog

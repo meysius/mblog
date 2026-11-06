@@ -1,0 +1,25 @@
+[Unit]
+Description=mblog (Next.js standalone server)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=mblog
+Group=mblog
+WorkingDirectory=/opt/mblog/current
+# PORT and HOSTNAME (127.0.0.1) are in here too: nginx is the only way in.
+EnvironmentFile=/opt/mblog/shared/.env
+ExecStart=/usr/bin/node server.js
+# Releases are prerendered from an empty database: see mblog-reset-cache.
+ExecStartPost=/usr/local/sbin/mblog-reset-cache
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+# The release's .next holds the server's page cache; uploads are in shared/.
+ReadWritePaths=/opt/mblog
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,111 @@
+name: Deploy
+
+# Publishes each push to main as a GitHub release. The server pulls it from
+# there (deploy/README.md), so this workflow holds no credentials for the
+# server and has no way to reach it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create and prune releases, nothing else
+
+jobs:
+  publish:
+    # The droplet runs Ubuntu 24.04 on x86-64, so the prebuilt sharp binary the
+    # build picks up matches it.
+    runs-on: ubuntu-24.04
+
+    # `next build` prerenders pages from the database. This one is empty and
+    # thrown away: the server marks those pages out of date each time it starts
+    # a release (deploy/mblog-reset-cache).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mblog
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: deploy-${{ github.sha }}
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/mblog
+      # The site's public address. Pages are prerendered with it, so it's baked
+      # into the release: keep it the same as SITE_URL in the server's .env.
+      SITE_URL: https://blog.feghhi.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version comes from packageManager in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # A release has no drizzle-kit, so its migrations run from one file with
+      # drizzle-orm and pg bundled in. Migrating the build's database with it
+      # checks the bundle works before the server needs it.
+      - name: Bundle and run the migrations
+        run: |
+          pnpm exec esbuild scripts/migrate.mts --bundle --platform=node --target=node22 \
+            --format=cjs --external:pg-native --log-level=warning --outfile=out/migrate.cjs
+          node out/migrate.cjs drizzle
+
+      - run: pnpm build
+
+      # The standalone server, plus what it leaves out: .next/static and public/
+      # (served by server.js once copied in), the migrations and their runner.
+      # release.txt is what the server reads first: which commit is latest, and
+      # the checksum the tarball must match.
+      - name: Package release
+        run: |
+          cp -a .next/standalone out/release
+          cp -a .next/static out/release/.next/static
+          if [ -d public ]; then cp -a public out/release/public; fi
+          cp -a drizzle out/migrate.cjs out/release/
+          tar -czf out/mblog.tar.gz -C out/release .
+          {
+            echo "commit=$GITHUB_SHA"
+            echo "sha256=$(sha256sum out/mblog.tar.gz | cut -d' ' -f1)"
+          } > out/release.txt
+          cat out/release.txt
+          du -sh out/release out/mblog.tar.gz
+
+      # gh uploads the assets to a draft and publishes it after, so the
+      # release webhook never fires before the files are there. A re-run, or a
+      # manual run on a commit that's already out, has nothing to publish.
+      - name: Publish release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG is already published"
+            exit 0
+          fi
+          gh release create "$TAG" out/mblog.tar.gz out/release.txt \
+            --target "$GITHUB_SHA" \
+            --latest \
+            --title "Deploy ${GITHUB_SHA::7}" \
+            --notes "$(git log -1 --format=%s)"
+
+      - name: Keep the newest 5 deploy releases
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("deploy-"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
+            while read -r tag; do
+              gh release delete "$tag" --yes --cleanup-tag
+            done

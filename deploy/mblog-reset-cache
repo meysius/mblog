@@ -1,0 +1,31 @@
+#!/bin/bash
+# Waits for the server to answer, then marks its cached public pages out of
+# date (POST /hooks/revalidate). mblog.service runs this right after each start
+# (ExecStartPost), as the mblog user with the app's .env, so a start only
+# counts once this has worked.
+#
+# Releases are built against an empty database (.github/workflows/deploy.yml),
+# so until this runs, a new release's home page, feed and sitemap list no
+# posts. A restart also forgets which cached pages saves marked out of date,
+# so it runs on every start, not only on deploys.
+#
+# Installed as /usr/local/sbin/mblog-reset-cache (root:root, 0755) by hand,
+# like mblog-deploy.
+set -euo pipefail
+
+url="http://127.0.0.1:${PORT:?}/hooks/revalidate"
+for _ in $(seq 60); do
+  # The token reaches curl on stdin, not in its arguments, which ps shows.
+  code=$(printf 'header = "Authorization: Bearer %s"\n' "${REVALIDATE_SECRET:?}" |
+    curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X POST -K - "$url") || true
+  case $code in
+    2??) exit 0 ;;
+    000) sleep 1 ;; # not listening yet
+    *)
+      echo "$url answered $code" >&2
+      exit 1
+      ;;
+  esac
+done
+echo "The server didn't answer on port $PORT within a minute" >&2
+exit 1
