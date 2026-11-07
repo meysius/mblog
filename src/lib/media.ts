@@ -21,6 +21,16 @@ export function mediaUrl(filename: string) {
   return `/media/${filename}`;
 }
 
+// Link previews (Telegram, X, LinkedIn, Slack, iMessage) show 1.91:1 images
+// large. A tall image gets cropped to a strip, shrunk to a thumbnail, or, as
+// Telegram did with a portrait PNG, dropped. src/lib/share-image.ts makes one.
+export const SHARE_IMAGE = { width: 1200, height: 630, type: "image/jpeg" } as const;
+
+/** Where an image's share version is served: its /media/ URL plus /share.jpg. */
+export function shareImageUrl(url: string) {
+  return `${url}/share.jpg`;
+}
+
 // Set when the bucket serves images to browsers itself. Read at build time.
 const PUBLIC_MEDIA_URL = process.env.NEXT_PUBLIC_MEDIA_URL?.replace(/\/+$/, "");
 

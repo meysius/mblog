@@ -6,7 +6,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db";
 import { media, siteSettings } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { mediaSrc, type MediaImage } from "@/lib/media";
+import { mediaSrc, type MediaImage, SHARE_IMAGE, shareImageUrl } from "@/lib/media";
 import { featureImageColumns, toMediaImage } from "@/lib/posts";
 import type { SiteSettings } from "@/lib/site-settings";
 
@@ -137,9 +137,7 @@ export function icons(favicon: MediaImage | null): Metadata["icons"] {
   return { icon: { url, type: "image/png", sizes }, apple: { url, sizes } };
 }
 
-/** A feature image as share previews show it. */
+/** A feature image as link previews show it: a 1200×630 JPEG made from it. */
 export function shareImages(image: MediaImage | null, alt: string) {
-  return image
-    ? [{ url: mediaSrc(image.url), width: image.width, height: image.height, alt: alt || undefined }]
-    : undefined;
+  return image ? [{ url: shareImageUrl(image.url), ...SHARE_IMAGE, alt: alt || undefined }] : undefined;
 }
