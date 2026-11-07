@@ -26,10 +26,15 @@
   --color-ring: var(--ring);
   --color-link: var(--link);
 
-  /* Newsreader for what people read, Schibsted Grotesk for the interface. */
+  /* Newsreader for lists and the home page, Schibsted Grotesk for the interface. */
   --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
   --font-sans: var(--font-schibsted-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-schibsted-grotesk), ui-sans-serif, system-ui, sans-serif;
+  /* A post itself follows Ghost's Casper theme: the system face for its title, excerpt
+     and headings, and Georgia for its body. */
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --font-georgia: Georgia, Times, serif;
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -143,30 +148,69 @@
   }
 }
 
-/* Rendered Markdown: post bodies and the editor preview. */
+/* A post or page's title and excerpt, sized as in Casper. Shared by the article and
+   the editor's fields, so what is typed looks like what readers see. */
+@layer components {
+  .article-title {
+    @apply font-system text-balance;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+  }
+  .article-excerpt {
+    @apply font-system text-pretty text-muted-foreground;
+    font-size: 1.0625rem;
+    line-height: 1.45;
+  }
+  @media (width >= 48rem) {
+    .article-excerpt {
+      font-size: 1.25rem;
+    }
+  }
+}
+
+/* Rendered Markdown: post bodies and the editor preview. Type and spacing follow
+   Casper: Georgia at 20px, 18px on phones, with headings in the system face. */
 @layer components {
   .prose {
-    @apply font-serif text-[1.1875rem] leading-[1.7] wrap-break-word;
+    @apply font-georgia wrap-break-word;
+    font-size: 1.125rem;
+    line-height: 1.6;
+  }
+  @media (width >= 40rem) {
+    .prose {
+      font-size: 1.25rem;
+    }
   }
   .prose > * + * {
-    margin-top: 1.25em;
+    margin-top: max(3.2vmin, 1.5rem);
   }
   .prose :where(h1, h2, h3, h4, h5, h6) {
-    @apply font-semibold tracking-tight text-balance;
+    @apply font-system text-balance;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     margin-top: 2em;
-    line-height: 1.25;
+    line-height: 1.15;
   }
   .prose > :where(h1, h2, h3, h4, h5, h6) + * {
-    margin-top: 0.6em;
+    margin-top: 0.9375rem;
+  }
+  /* A quote or a rule gets more room on both sides. */
+  .prose > :where(blockquote, hr),
+  .prose > :where(blockquote, hr) + * {
+    margin-top: max(4.8vmin, 2rem);
   }
   .prose > :first-child {
     margin-top: 0;
   }
   .prose h1 {
     font-size: 1.75em;
+    font-weight: 700;
   }
   .prose h2 {
-    font-size: 1.45em;
+    font-size: 1.4em;
+    font-weight: 700;
   }
   .prose h3 {
     font-size: 1.2em;
@@ -181,7 +225,10 @@
     font-weight: 600;
   }
   .prose :where(ul, ol) {
-    padding-left: 1.5em;
+    padding-left: 1.9em;
+  }
+  .prose li {
+    padding-left: 0.3em;
   }
   .prose ul {
     list-style-type: disc;
@@ -193,7 +240,7 @@
     color: var(--muted-foreground);
   }
   .prose :where(li + li, li > * + *) {
-    margin-top: 0.4em;
+    margin-top: 0.5em;
   }
   .prose .contains-task-list {
     padding-left: 0;
@@ -207,9 +254,6 @@
     padding-left: 1.25em;
     font-style: italic;
     color: var(--muted-foreground);
-  }
-  .prose hr {
-    margin-block: 3em;
   }
   .prose :not(pre) > code {
     @apply rounded bg-muted font-mono;

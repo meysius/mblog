@@ -49,16 +49,11 @@ export function PostArticle({ kind = "post", post }: PostArticleProps) {
             {formatReadingTime(countWords(post.body))}
           </p>
         )}
-        <h1
-          className={cn(
-            "font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl",
-            kind === "post" && "mt-3",
-          )}
-        >
+        <h1 className={cn("article-title", kind === "post" && "mt-3")}>
           {post.title}
         </h1>
         {post.excerpt && (
-          <p className="mt-4 font-serif text-xl leading-snug text-pretty text-muted-foreground sm:text-2xl">
+          <p className="article-excerpt mt-3.5 md:mt-5">
             {post.excerpt}
           </p>
         )}
@@ -76,7 +71,7 @@ export function PostArticle({ kind = "post", post }: PostArticleProps) {
           className="mb-10 w-full rounded-lg bg-muted"
         />
       )}
-      <Markdown className="max-w-[65ch]">{post.body}</Markdown>
+      <Markdown>{post.body}</Markdown>
       {/* Where a reader finishes, ways to find more like it. */}
       {tags.length > 0 && (
         <footer className="mt-16">
@@ -93,7 +88,7 @@ export function PostArticleSkeleton() {
     <div aria-hidden className="flex flex-col">
       <Skeleton className="h-4 w-36" />
       <Skeleton className="mt-4 h-11 w-3/4" />
-      <div className="mt-12 flex max-w-[65ch] flex-col gap-3">
+      <div className="mt-12 flex flex-col gap-3">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-5/6" />

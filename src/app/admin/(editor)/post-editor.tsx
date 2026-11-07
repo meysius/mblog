@@ -635,7 +635,7 @@ export function PostEditor({
                       }}
                       // The browser can only point out a field it can see.
                       onInvalid={() => flushSync(() => setMode("write"))}
-                      className={`${surface} font-serif text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl`}
+                      className={`${surface} article-title`}
                     />
                     {state.errors?.title && (
                       <FieldError id="title-error" className="mt-2">
@@ -664,7 +664,7 @@ export function PostEditor({
                       // Styled like it is under the published post's title.
                       className={cn(
                         surface,
-                        "peer mt-4 font-serif text-xl leading-snug text-pretty text-muted-foreground placeholder:text-muted-foreground/50 sm:text-2xl",
+                        "peer article-excerpt mt-3.5 placeholder:text-muted-foreground/50 md:mt-5",
                       )}
                     />
                     <p
@@ -706,7 +706,8 @@ export function PostEditor({
                         e.preventDefault();
                         bodyImages.insertImages([...e.dataTransfer.files]);
                       }}
-                      className={`${surface} min-h-[50vh] max-w-[65ch] font-serif text-[1.1875rem] leading-[1.7]`}
+                      // Set like the published body, .prose in globals.css.
+                      className={`${surface} min-h-[50vh] font-georgia text-lg/[1.6] sm:text-xl/[1.6]`}
                     />
                     {bodyImages.error && <FieldError className="mt-3">{bodyImages.error}</FieldError>}
                   </div>

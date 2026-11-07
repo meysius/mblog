@@ -88,7 +88,7 @@ export function PostGrid({
         <h2 id="posts" className={eyebrow}>
           {label}
         </h2>
-        <span className="font-serif text-sm italic text-muted-foreground">{note}</span>
+        <span className="font-georgia text-sm italic text-muted-foreground">{note}</span>
       </div>
       <InfinitePosts
         className="grid gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-12"
@@ -115,11 +115,11 @@ export function PostCard({ post }: { post: PostSummary }) {
         )}
         <time dateTime={post.publishedAt.toISOString()}>{formatShortDate(post.publishedAt)}</time>
       </p>
-      <h3 className="mt-2 font-serif text-2xl leading-tight font-medium tracking-tight text-pretty">
+      <h3 className="mt-2 font-system text-[1.625rem] leading-[1.2] font-extrabold tracking-[-0.01em] text-pretty">
         <PostLink post={post} />
       </h3>
       {post.excerpt && (
-        <p className="mt-3 line-clamp-2 font-serif text-base leading-relaxed text-muted-foreground">
+        <p className="mt-3 line-clamp-2 font-system text-base leading-normal text-muted-foreground">
           {post.excerpt}
         </p>
       )}
@@ -144,7 +144,7 @@ function Thumbnail({ post }: { post: PostSummary }) {
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035] motion-reduce:transition-none"
         />
       ) : (
-        <div aria-hidden className="flex h-full items-center justify-center bg-linear-to-br from-muted to-background font-serif text-7xl italic text-foreground/20">
+        <div aria-hidden className="flex h-full items-center justify-center bg-linear-to-br from-muted to-background font-georgia text-7xl italic text-foreground/20">
           {Array.from(post.title)[0]}
         </div>
       )}

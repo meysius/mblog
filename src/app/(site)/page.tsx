@@ -76,7 +76,7 @@ export default async function Home() {
       ) : (
         <div className="border-y py-16">
           <p className={cn(eyebrow, "mb-4 text-muted-foreground")}>The journal</p>
-          <p className="font-serif text-3xl tracking-tight">Nothing published yet.</p>
+          <p className="font-system text-3xl font-extrabold tracking-[-0.01em]">Nothing published yet.</p>
         </div>
       )}
     </div>
@@ -112,7 +112,7 @@ function IntroSection({ intro: { photo, heading, text, button } }: { intro: Intr
           </p>
         </div>
         {heading && (
-          <h1 className="max-w-xl font-serif text-5xl leading-[1.05] font-normal tracking-[-0.045em] text-balance sm:text-6xl lg:text-7xl">
+          <h1 className="max-w-xl font-system text-4xl leading-[1.05] font-extrabold tracking-[-0.02em] text-balance sm:text-5xl lg:text-6xl">
             {heading}
           </h1>
         )}
@@ -120,7 +120,8 @@ function IntroSection({ intro: { photo, heading, text, button } }: { intro: Intr
       {(text || button) && (
         <div className="min-w-0 self-end lg:pb-1">
           {text && (
-            <Markdown className="max-w-xl text-lg leading-relaxed text-muted-foreground [&>p+p]:mt-4">
+            // Set like a post's excerpt.
+            <Markdown className="max-w-xl font-system text-[1.0625rem] leading-[1.45] text-muted-foreground md:text-xl [&>p+p]:mt-4">
               {text}
             </Markdown>
           )}
@@ -181,14 +182,14 @@ function LeadPost({ post }: { post: PostSummary }) {
         </p>
         <h3
           className={cn(
-            "max-w-2xl font-serif text-3xl leading-[1.1] font-medium tracking-tight text-balance sm:text-4xl lg:text-[2.75rem]",
+            "max-w-2xl font-system text-3xl leading-[1.05] font-extrabold tracking-[-0.01em] text-balance sm:text-4xl lg:text-[2.75rem]",
             post.featureImage && "xl:text-4xl",
           )}
         >
           <PostLink post={post} />
         </h3>
         {post.excerpt && (
-          <p className="mt-4 line-clamp-3 max-w-xl font-serif text-lg leading-relaxed text-pretty text-muted-foreground">
+          <p className="mt-4 line-clamp-3 max-w-xl font-system text-lg leading-normal text-pretty text-muted-foreground">
             {post.excerpt}
           </p>
         )}
