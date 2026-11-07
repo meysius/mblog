@@ -4,12 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { Markdown } from "@/components/markdown";
 import { eyebrow, PostGrid, PostLink } from "@/components/post-list";
+import { TagLinks } from "@/components/tag-links";
 import { formatLongDate } from "@/lib/format";
 import { mediaSrc } from "@/lib/media";
 import { getHomePage, type PostSummary } from "@/lib/posts";
 import { formatReadingTime } from "@/lib/reading-time";
 import { alternates, getSiteSettings, openGraphDefaults } from "@/lib/site";
 import { hasIntro, type Intro, isInternal } from "@/lib/site-settings";
+import { getPublishedTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import { loadHomePage } from "./actions";
 
@@ -33,7 +35,11 @@ const textLink =
 // One post leads and the rest of the page follow in a grid, which carries on into
 // the later pages, /page/2 and on, as the reader scrolls.
 export default async function Home() {
-  const [{ posts, pageCount }, site] = await Promise.all([getHomePage(1), getSiteSettings()]);
+  const [{ posts, pageCount }, site, tags] = await Promise.all([
+    getHomePage(1),
+    getSiteSettings(),
+    getPublishedTags(),
+  ]);
   const [lead, ...rest] = posts;
 
   return (
@@ -43,9 +49,16 @@ export default async function Home() {
       {lead ? (
         <div className="flex flex-col gap-14 sm:gap-20">
           <section aria-labelledby="journal">
-            <h2 id="journal" className={cn(eyebrow, "mb-6 border-t pt-5")}>
-              The journal
-            </h2>
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t pt-5">
+              <h2 id="journal" className={eyebrow}>
+                The journal
+              </h2>
+              {tags.length > 0 && (
+                <nav aria-label="Browse by tag">
+                  <TagLinks tags={tags} />
+                </nav>
+              )}
+            </div>
             <LeadPost post={lead} />
           </section>
           {rest.length > 0 && (

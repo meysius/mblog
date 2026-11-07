@@ -1,4 +1,4 @@
-import { count, eq, like, max, or, sql } from "drizzle-orm";
+import { count, desc, eq, like, max, or, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { db, type Transaction } from "@/db";
@@ -6,6 +6,8 @@ import { posts, postTags, tags } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { isPublished, POSTS_TAG, publishedCacheLife } from "@/lib/posts";
 import { slugify } from "@/lib/slug";
+
+const byName = sql`lower(${tags.name})`;
 
 // Public reads share the posts' cache tag: a tag's page changes with its posts,
 // and post pages show their tags' names.
@@ -24,27 +26,33 @@ export async function getPublishedTag(slug: string) {
   return tag ?? null;
 }
 
-/** Tags that published posts have, with how many and when the latest of them changed. */
+/**
+ * Tags that published posts have, the most used first, with how many and when the
+ * latest of them changed.
+ */
 export async function getPublishedTags() {
   "use cache";
   cacheLife(await publishedCacheLife());
   cacheTag(POSTS_TAG);
 
   const rows = await db
-    .select({ slug: tags.slug, postCount: count(), updatedAt: max(posts.updatedAt) })
+    .select({
+      name: tags.name,
+      slug: tags.slug,
+      postCount: count(),
+      updatedAt: max(posts.updatedAt),
+    })
     .from(tags)
     .innerJoin(postTags, eq(postTags.tagId, tags.id))
     .innerJoin(posts, eq(posts.id, postTags.postId))
     .where(isPublished)
     .groupBy(tags.id)
-    .orderBy(tags.slug);
+    .orderBy(desc(count()), byName);
   // The inner joins guarantee each tag has a post.
   return rows.map((row) => ({ ...row, updatedAt: row.updatedAt! }));
 }
 
 // Admin reads are never cached, and check the session themselves.
-
-const byName = sql`lower(${tags.name})`;
 
 /** Every tag, by name, with how many posts have it, drafts included. */
 export async function getTags() {
