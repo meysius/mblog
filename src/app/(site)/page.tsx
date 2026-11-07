@@ -127,35 +127,51 @@ function IntroSection({ intro: { photo, heading, text, button } }: { intro: Intr
   );
 }
 
+// The feature image keeps a 16:9 frame, as Ghost's themes give card images, so a
+// wide banner loses only a sliver. It never stretches to the text beside it,
+// which cropped one to a tall strip. It sits beside the text only on wide screens,
+// where it gets most of the width; on narrower ones it leads above the text.
 function LeadPost({ post }: { post: PostSummary }) {
   return (
     <article
       className={cn(
         "group relative isolate grid overflow-hidden rounded-lg bg-muted/55",
-        post.featureImage && "md:grid-cols-[1.1fr_1fr]",
+        post.featureImage && "xl:grid-cols-[1.6fr_1fr] xl:items-center",
       )}
     >
       {post.featureImage && (
-        <div className="overflow-hidden">
-          <Image
-            src={mediaSrc(post.featureImage.url)}
-            width={post.featureImage.width}
-            height={post.featureImage.height}
-            alt=""
-            sizes="(min-width: 72rem) 36rem, (min-width: 48rem) 52vw, calc(100vw - 3rem)"
-            loading="eager"
-            fetchPriority="high"
-            className="aspect-[4/3] h-full w-full bg-muted object-cover transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transition-none md:aspect-auto md:min-h-96"
-          />
+        <div className="xl:p-3">
+          <div className="overflow-hidden xl:rounded-md">
+            <Image
+              src={mediaSrc(post.featureImage.url)}
+              width={post.featureImage.width}
+              height={post.featureImage.height}
+              alt=""
+              sizes="(min-width: 80rem) 41rem, (min-width: 72rem) 68rem, (min-width: 40rem) calc(100vw - 4rem), calc(100vw - 3rem)"
+              loading="eager"
+              fetchPriority="high"
+              className="aspect-video w-full bg-muted object-cover transition-transform duration-500 group-hover:scale-[1.025] motion-reduce:transition-none"
+            />
+          </div>
         </div>
       )}
-      <div className={cn("flex min-w-0 flex-col items-start p-6 sm:p-9 lg:p-12", !post.featureImage && "sm:p-12 lg:p-16")}>
+      <div
+        className={cn(
+          "flex min-w-0 flex-col items-start p-6 sm:p-9 lg:p-12",
+          post.featureImage ? "xl:py-8 xl:pr-10 xl:pl-7" : "sm:p-12 lg:p-16",
+        )}
+      >
         <p className={cn(eyebrow, "mb-6 flex items-center gap-2 text-link")}>
           <span aria-hidden className="size-1.5 rounded-full bg-current" />
           {post.featured ? "In the spotlight" : "Latest entry"}
           {post.tags[0] && <span className="text-muted-foreground"> / {post.tags[0].name}</span>}
         </p>
-        <h3 className="max-w-2xl font-serif text-3xl leading-[1.1] font-medium tracking-tight text-balance sm:text-4xl lg:text-[2.75rem]">
+        <h3
+          className={cn(
+            "max-w-2xl font-serif text-3xl leading-[1.1] font-medium tracking-tight text-balance sm:text-4xl lg:text-[2.75rem]",
+            post.featureImage && "xl:text-4xl",
+          )}
+        >
           <PostLink post={post} />
         </h3>
         {post.excerpt && (
@@ -168,7 +184,7 @@ function LeadPost({ post }: { post: PostSummary }) {
           <span aria-hidden>·</span>
           <span>{formatReadingTime(post.wordCount)}</span>
         </p>
-        <span className="mt-8 inline-flex items-center gap-2 text-sm font-medium md:mt-auto md:pt-8">
+        <span className="mt-8 inline-flex items-center gap-2 text-sm font-medium xl:mt-6">
           Read the story
           <ArrowUpRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none" />
         </span>
